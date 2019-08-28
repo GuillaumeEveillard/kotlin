@@ -196,7 +196,10 @@ class ExpressionCodegen(
         if (state.isParamAssertionsDisabled)
             return
 
-        val isSyntheticOrBridge = irFunction.origin.isSynthetic ||
+        val notCallableFromJava = isInlineLambda ||
+                Visibilities.isPrivate(irFunction.visibility) ||
+                irFunction.origin.isSynthetic ||
+                (irFunction is IrConstructor && irFunction.parentAsClass.isAnonymousObject) ||
                 // TODO: Implement this as a lowering, so that we can more easily exclude generated methods.
                 irFunction.origin == JvmLoweredDeclarationOrigin.INLINE_CLASS_GENERATED_IMPL_METHOD ||
                 // Although these are accessible from Java, the functions they bridge to already have the assertions.
@@ -204,7 +207,7 @@ class ExpressionCodegen(
                 irFunction.origin == JvmLoweredDeclarationOrigin.DEFAULT_IMPLS_BRIDGE ||
                 irFunction.origin == JvmLoweredDeclarationOrigin.JVM_STATIC_WRAPPER ||
                 irFunction.origin == JvmLoweredDeclarationOrigin.MULTIFILE_BRIDGE
-        if (!isInlineLambda && !isSyntheticOrBridge && !Visibilities.isPrivate(irFunction.visibility)) {
+        if (!notCallableFromJava) {
             irFunction.extensionReceiverParameter?.let { generateNonNullAssertion(it) }
             irFunction.valueParameters.forEach(::generateNonNullAssertion)
         }
