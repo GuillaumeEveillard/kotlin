@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.backend.jvm.lower.constantValue
 import org.jetbrains.kotlin.codegen.*
 import org.jetbrains.kotlin.codegen.binding.CodegenBinding
 import org.jetbrains.kotlin.codegen.inline.DefaultSourceMapper
+import org.jetbrains.kotlin.codegen.inline.NameGenerator
 import org.jetbrains.kotlin.codegen.inline.ReifiedTypeParametersUsages
 import org.jetbrains.kotlin.codegen.inline.SourceMapper
 import org.jetbrains.kotlin.codegen.serialization.JvmSerializationBindings
@@ -81,6 +82,13 @@ open class ClassCodegen protected constructor(
             is MetadataSource.File -> DescriptorSerializer.createTopLevel(serializerExtension)
             else -> null
         }
+
+    fun getRegeneratedObjectNameGenerator(function: IrFunction): NameGenerator {
+        val name = function.name.takeIf { !it.isSpecial }
+        return context.regeneratedObjectNameGenerators.getOrPut(irClass to name) {
+            NameGenerator(type.internalName + if (name != null) "\$$name\$\$inlined" else "\$\$inlined")
+        }
+    }
 
     fun generate(): ReifiedTypeParametersUsages {
         if (withinInline) {
