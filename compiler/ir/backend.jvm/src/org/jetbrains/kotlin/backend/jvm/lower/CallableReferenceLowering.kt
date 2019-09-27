@@ -18,7 +18,7 @@ import org.jetbrains.kotlin.backend.jvm.codegen.isInlineIrExpression
 import org.jetbrains.kotlin.backend.jvm.ir.createJvmIrBuilder
 import org.jetbrains.kotlin.backend.jvm.ir.irArray
 import org.jetbrains.kotlin.backend.jvm.ir.isInlineParameter
-import org.jetbrains.kotlin.backend.jvm.ir.shouldBeHidden
+import org.jetbrains.kotlin.backend.jvm.ir.isLambda
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.descriptors.Visibilities
 import org.jetbrains.kotlin.ir.IrStatement
@@ -30,15 +30,14 @@ import org.jetbrains.kotlin.ir.builders.declarations.buildClass
 import org.jetbrains.kotlin.ir.declarations.*
 import org.jetbrains.kotlin.ir.expressions.*
 import org.jetbrains.kotlin.ir.expressions.impl.IrClassReferenceImpl
+import org.jetbrains.kotlin.ir.expressions.impl.IrFunctionReferenceImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrInstanceInitializerCallImpl
 import org.jetbrains.kotlin.ir.types.*
 import org.jetbrains.kotlin.ir.util.*
 import org.jetbrains.kotlin.ir.visitors.IrElementTransformerVoid
 import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
 import org.jetbrains.kotlin.name.Name
-import org.jetbrains.kotlin.resolve.DescriptorUtils
 import org.jetbrains.kotlin.utils.addIfNotNull
-import org.jetbrains.org.objectweb.asm.Type
 
 internal val callableReferencePhase = makeIrFilePhase(
     ::CallableReferenceLowering,
@@ -349,24 +348,14 @@ internal class CallableReferenceLowering(private val context: JvmBackendContext)
             get() = (metadata as? MetadataSource.Function)?.descriptor?.name ?: name
 
         private fun createGetSignatureMethod(superFunction: IrSimpleFunction): IrSimpleFunction = buildOverride(superFunction).apply {
-            val codegenContext = context
-            body = context.createIrBuilder(symbol, startOffset, endOffset).run {
-                // TODO do not use descriptors
-                val declaration = codegenContext.referenceFunction(
-                    DescriptorUtils.unwrapFakeOverride(irFunctionReference.symbol.descriptor).original
-                ).owner
-                val method = codegenContext.methodSignatureMapper.mapAsmMethod(declaration)
-                // HACK: When referencing a constructor taking inline class parameters, we will actually
-                //       end up calling a public bridge method with an additional argument.
-                // TODO: Don't compute signatures in CallableReferenceLowering
-                val descriptor = if (declaration is IrConstructor && declaration.shouldBeHidden) {
-                    val marker =
-                        codegenContext.typeMapper.mapType(codegenContext.ir.symbols.defaultConstructorMarker.owner.defaultType)
-                    Type.getMethodDescriptor(method.returnType, *method.argumentTypes, marker)
-                } else {
-                    method.descriptor
-                }
-                irExprBody(irString(method.name + descriptor))
+            body = context.createJvmIrBuilder(symbol, startOffset, endOffset).run {
+                irExprBody(irCall(backendContext.ir.symbols.signatureStringIntrinsic).apply {
+                    putValueArgument(0, with(irFunctionReference) {
+                        IrFunctionReferenceImpl(
+                            startOffset, endOffset, type, symbol, descriptor, typeArgumentsCount, valueArgumentsCount, origin
+                        )
+                    })
+                })
             }
         }
 
@@ -414,9 +403,6 @@ internal class CallableReferenceLowering(private val context: JvmBackendContext)
             }
         }
     }
-
-    private val IrStatementOrigin?.isLambda
-        get() = this == IrStatementOrigin.LAMBDA || this == IrStatementOrigin.ANONYMOUS_FUNCTION
 
     private val currentDeclarationParent
         get() = allScopes.last { it.irElement is IrDeclarationParent }.irElement as IrDeclarationParent
