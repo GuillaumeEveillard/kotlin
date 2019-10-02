@@ -81,14 +81,10 @@ abstract class KotlinAbstractUElement(private val givenParent: UElement?) : Kotl
             parent = parent.parent
         }
 
-        if (KotlinConverter.forceUInjectionHost) {
-            if (parent is KtBlockStringTemplateEntry) {
-                parent = parent.parent
-            }
-        } else
-            while (parent is KtStringTemplateEntryWithExpression || parent is KtStringTemplateExpression && parent.entries.size == 1) {
-                parent = parent.parent
-            }
+        while (parent is KtStringTemplateEntryWithExpression ||
+               parent is KtStringTemplateExpression && parent.entries.size == 1) {
+            parent = parent.parent
+        }
 
         if (parent is KtWhenConditionWithExpression) {
             parent = parent.parent

@@ -8,71 +8,47 @@ package org.jetbrains.kotlin.idea.testFramework
 import com.intellij.ide.impl.ProjectUtil
 import com.intellij.openapi.externalSystem.importing.ImportSpecBuilder
 import com.intellij.openapi.externalSystem.service.execution.ProgressExecutionMode
-import com.intellij.openapi.externalSystem.service.project.manage.ExternalProjectsManagerImpl
-import com.intellij.openapi.externalSystem.util.ExternalSystemApiUtil
 import com.intellij.openapi.externalSystem.util.ExternalSystemUtil
-import com.intellij.openapi.project.DumbService
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.roots.ProjectRootManager
-import org.jetbrains.plugins.gradle.service.project.open.setupGradleSettings
-import org.jetbrains.plugins.gradle.settings.GradleProjectSettings
+import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.testFramework.PlatformTestUtil
+import com.intellij.testFramework.runInEdtAndWait
+import com.intellij.openapi.project.ex.ProjectManagerEx
+import org.jetbrains.plugins.gradle.service.project.GradleProjectOpenProcessor
 import org.jetbrains.plugins.gradle.util.GradleConstants
-import org.jetbrains.plugins.gradle.util.GradleLog
-import kotlin.test.assertNotNull
+import java.io.File
+import java.nio.file.Paths
 
 fun refreshGradleProject(projectPath: String, project: Project) {
-    _importProject(projectPath, project)
+    GradleProjectOpenProcessor.openGradleProject(project, null, Paths.get(projectPath))
 
-//    val gradleArguments = System.getProperty("kotlin.test.gradle.import.arguments")
-//    ExternalSystemUtil.refreshProjects(
-//        ImportSpecBuilder(project, GradleConstants.SYSTEM_ID)
-//            .forceWhenUptodate()
-//            .useDefaultCallback()
-//            .use(ProgressExecutionMode.MODAL_SYNC)
-//            .also {
-//                gradleArguments?.run(it::withArguments)
-//            }
-//    )
-
-    //ProjectUtil.updateLastProjectLocation(projectPath)
+    val gradleArguments = System.getProperty("kotlin.test.gradle.import.arguments")
+    ExternalSystemUtil.refreshProjects(
+        ImportSpecBuilder(project, GradleConstants.SYSTEM_ID)
+            .forceWhenUptodate()
+            .useDefaultCallback()
+            .use(ProgressExecutionMode.MODAL_SYNC)
+            .also {
+                gradleArguments?.run(it::withArguments)
+            }
+    )
 
     dispatchAllInvocationEvents()
 }
 
-/**
- * inspired by org.jetbrains.plugins.gradle.service.project.open.importProject(projectDirectory, project)
- */
-private fun _importProject(projectPath: String, project: Project) {
-    GradleLog.LOG.info("Import project at $projectPath")
-    val projectSdk = ProjectRootManager.getInstance(project).projectSdk
-    assertNotNull(projectSdk, "project SDK not found for ${project.name} at $projectPath")
-    val gradleProjectSettings = GradleProjectSettings()
-    setupGradleSettings(gradleProjectSettings, projectPath, project, projectSdk)
+fun openGradleProject(projectPath: String, project: Project) {
+        dispatchAllInvocationEvents()
 
-    _attachGradleProjectAndRefresh(gradleProjectSettings, project)
-}
+        val virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByPath(projectPath)!!
 
-/**
- * inspired by org.jetbrains.plugins.gradle.service.project.open.attachGradleProjectAndRefresh(gradleProjectSettings, project)
- * except everything is MODAL_SYNC
- */
-private fun _attachGradleProjectAndRefresh(
-    gradleProjectSettings: GradleProjectSettings,
-    project: Project
-) {
-    val externalProjectPath = gradleProjectSettings.externalProjectPath
-    ExternalProjectsManagerImpl.getInstance(project).runWhenInitialized {
-        DumbService.getInstance(project).runWhenSmart {
-            ExternalSystemUtil.ensureToolWindowInitialized(project, GradleConstants.SYSTEM_ID)
+        FileDocumentManager.getInstance().saveAllDocuments()
+
+        val path = Paths.get(virtualFile.path)
+        GradleProjectOpenProcessor.openGradleProject(project, null, path)
+
+        dispatchAllInvocationEvents()
+        runInEdtAndWait {
+            PlatformTestUtil.saveProject(project)
         }
     }
-    //ExternalProjectsManagerImpl.getInstance(project).setStoreExternally(false)
-
-    ExternalProjectsManagerImpl.disableProjectWatcherAutoUpdate(project)
-    val settings = ExternalSystemApiUtil.getSettings(project, GradleConstants.SYSTEM_ID)
-    if (settings.getLinkedProjectSettings(externalProjectPath) == null) {
-        settings.linkProject(gradleProjectSettings)
-    }
-    //ExternalSystemUtil.refreshProject(project, GradleConstants.SYSTEM_ID, externalProjectPath, true, ProgressExecutionMode.MODAL_SYNC)
-    ExternalSystemUtil.refreshProject(project, GradleConstants.SYSTEM_ID, externalProjectPath, false, ProgressExecutionMode.MODAL_SYNC)
-}

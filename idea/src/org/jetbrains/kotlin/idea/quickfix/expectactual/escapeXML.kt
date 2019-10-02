@@ -7,4 +7,4 @@ package org.jetbrains.kotlin.idea.quickfix.expectactual
 
 import com.intellij.openapi.util.text.StringUtil
 
-fun escapeXml(text: String): String = StringUtil.escapeXmlEntities(text)
+fun escapeXml(text: String): String = StringUtil.escapeXml(text)

@@ -86,7 +86,7 @@ class FirJavaElementFinder(
                 firClass.classKind == ClassKind.INTERFACE,
                 firClass.classKind == ClassKind.ENUM_CLASS, false, false,
                 firClass.classKind == ClassKind.ANNOTATION_CLASS, false, false,
-                false, false, false
+                false, false
             )
         )
 

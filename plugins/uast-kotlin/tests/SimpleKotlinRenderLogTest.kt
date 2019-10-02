@@ -1,6 +1,5 @@
 package org.jetbrains.uast.test.kotlin
 
-import org.jetbrains.uast.kotlin.KotlinConverter
 import org.junit.Test
 
 class SimpleKotlinRenderLogTest : AbstractKotlinRenderLogTest() {
@@ -27,11 +26,6 @@ class SimpleKotlinRenderLogTest : AbstractKotlinRenderLogTest() {
     @Test fun testStringTemplate() = doTest("StringTemplate")
 
     @Test fun testStringTemplateComplex() = doTest("StringTemplateComplex")
-
-    @Test
-    fun testStringTemplateComplexForUInjectionHost() = withForceUInjectionHostValue {
-        doTest("StringTemplateComplexForUInjectionHost")
-    }
 
     @Test fun testQualifiedConstructorCall() = doTest("QualifiedConstructorCall")
 
@@ -102,14 +96,4 @@ class SimpleKotlinRenderLogTest : AbstractKotlinRenderLogTest() {
 
     @Test
     fun testLambdaReturn() = doTest("LambdaReturn")
-}
-
-fun withForceUInjectionHostValue(call: () -> Unit) {
-    val prev = KotlinConverter.forceUInjectionHost
-    KotlinConverter.forceUInjectionHost = true
-    try {
-        call.invoke()
-    } finally {
-        KotlinConverter.forceUInjectionHost = prev
-    }
 }

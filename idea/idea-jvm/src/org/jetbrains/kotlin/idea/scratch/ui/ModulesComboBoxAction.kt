@@ -41,8 +41,8 @@ class ModulesComboBoxAction(private val scratchFile: ScratchFile) : LabeledCombo
      * By default this action uses big font for label, so we have to decrease it
      * to make it look the same as in [CheckboxAction].
      */
-    override fun createCustomComponent(presentation: Presentation, place: String): JComponent {
-        val customComponent = super.createCustomComponent(presentation, place)
+    override fun createCustomComponent(presentation: Presentation): JComponent {
+        val customComponent = super.createCustomComponent(presentation)
         customComponent.components.forEach { it.font = UIUtil.getFont(UIUtil.FontSize.SMALL, it.font) }
         return customComponent
     }

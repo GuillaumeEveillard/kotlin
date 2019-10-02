@@ -11,8 +11,8 @@ import com.intellij.util.ui.JBUI
 import javax.swing.JComponent
 
 abstract class SmallBorderCheckboxAction(text: String, description: String? = null) : CheckboxAction(text, description, null) {
-    override fun createCustomComponent(presentation: Presentation, place: String): JComponent {
-        val checkbox = super.createCustomComponent(presentation, place)
+    override fun createCustomComponent(presentation: Presentation): JComponent {
+        val checkbox = super.createCustomComponent(presentation)
         checkbox.border = JBUI.Borders.emptyRight(4)
         return checkbox
     }

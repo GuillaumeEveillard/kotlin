@@ -7,10 +7,7 @@ package org.jetbrains.kotlin.gradle
 
 import com.intellij.openapi.vfs.VirtualFile
 import org.jetbrains.kotlin.idea.codeInsight.gradle.MultiplePluginVersionGradleImportingTestCase
-import org.jetbrains.plugins.gradle.execution.test.runner.GradleTestRunConfigurationProducer
 
 fun MultiplePluginVersionGradleImportingTestCase.findTasksToRun(file: VirtualFile): List<String>? {
-    return GradleTestRunConfigurationProducer.findAllTestsTaskToRun(file, project)
-        .flatMap { it.tasks }
-        .sorted()
+    return null
 }

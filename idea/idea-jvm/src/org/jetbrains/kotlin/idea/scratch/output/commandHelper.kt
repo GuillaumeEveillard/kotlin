@@ -5,4 +5,8 @@
 
 package org.jetbrains.kotlin.idea.scratch.output
 
-inline fun executeCommand(crossinline command: () -> Unit) = com.intellij.openapi.command.executeCommand(command = command)
+import com.intellij.openapi.command.CommandProcessor
+
+fun executeCommand(command: () -> Unit) {
+    CommandProcessor.getInstance().executeCommand(null, command, null, null)
+}

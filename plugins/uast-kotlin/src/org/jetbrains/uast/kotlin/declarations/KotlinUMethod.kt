@@ -105,15 +105,12 @@ open class KotlinUMethod(
         wrapExpressionBody(this, bodyExpression)
     }
 
+    override val isOverride: Boolean
+        get() = (kotlinOrigin as? KtCallableDeclaration)?.hasModifier(KtTokens.OVERRIDE_KEYWORD) ?: false
+
     override fun getBody(): PsiCodeBlock? = super<UAnnotationMethod>.getBody()
 
     override fun getOriginalElement(): PsiElement? = super<UAnnotationMethod>.getOriginalElement()
-
-    override val returnTypeReference: UTypeReferenceExpression? by lz {
-        (sourcePsi as? KtCallableDeclaration)?.typeReference?.let {
-            LazyKotlinUTypeReferenceExpression(it, this) { javaPsi.returnType ?: UastErrorType }
-        }
-    }
 
     override fun equals(other: Any?) = other is KotlinUMethod && psi == other.psi
 

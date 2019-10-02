@@ -10,8 +10,8 @@ package org.jetbrains.kotlin.idea.scratch.output
 import com.intellij.openapi.editor.InlayModel
 
 fun InlayModel.addInlay(offset: Int, renderer: InlayScratchFileRenderer) {
-    addAfterLineEndElement(offset, false, renderer)
+    addInlineElement(offset, true, renderer)
 }
 
 fun InlayModel.getInlays(start: Int, end: Int) =
-    getAfterLineEndElementsInRange(start, end).filter { it.renderer is InlayScratchFileRenderer }
+    getInlineElementsInRange(start, end).filter { it.renderer is InlayScratchFileRenderer }

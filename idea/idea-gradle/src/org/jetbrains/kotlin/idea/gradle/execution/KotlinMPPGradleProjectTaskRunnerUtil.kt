@@ -6,13 +6,9 @@
 package org.jetbrains.kotlin.idea.gradle.execution
 
 import com.intellij.openapi.module.Module
-import org.jetbrains.plugins.gradle.settings.GradleProjectSettings
+import org.jetbrains.plugins.gradle.settings.GradleSystemRunningSettings
 
 //BUNCH: 183
 fun isDelegatedBuild(module: Module): Boolean {
-    val projectUrl = module.project.presentableUrl
-    if (projectUrl == null || !GradleProjectSettings.isDelegatedBuildEnabled(module)) {
-        return false
-    }
-    return true
+    return GradleSystemRunningSettings.getInstance().isUseGradleAwareMake()
 }

@@ -24,7 +24,6 @@ import org.jetbrains.kotlin.psi.KtObjectLiteralExpression
 import org.jetbrains.kotlin.psi.KtSuperTypeCallEntry
 import org.jetbrains.kotlin.resolve.calls.callUtil.getResolvedCall
 import org.jetbrains.uast.*
-import org.jetbrains.uast.kotlin.declarations.KotlinUIdentifier
 import org.jetbrains.uast.kotlin.internal.DelegatedMultiResolve
 
 class KotlinUObjectLiteralExpression(
@@ -84,10 +83,7 @@ class KotlinUObjectLiteralExpression(
             get() = identifier
 
         override val identifier: String
-            get() = psi.name ?: referenceNameElement.sourcePsi?.text ?: "<error>"
-
-        override val referenceNameElement: UElement
-            get() = KotlinUIdentifier(psi.typeReference?.nameElement, this)
+            get() = psi.name ?: "<error>"
     }
 
 }
