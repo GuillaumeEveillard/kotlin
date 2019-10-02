@@ -39,7 +39,7 @@ dependencies {
     
     testCompile(kotlinStdlib())
 
-    testCompile(project(":kotlin-daemon"))
+    testCompile(project(":kotlin-daemon")) { isTransitive = false }
     testCompile(commonDep("junit:junit"))
     testCompileOnly(project(":kotlin-test:kotlin-test-jvm"))
     testCompileOnly(project(":kotlin-test:kotlin-test-junit"))
