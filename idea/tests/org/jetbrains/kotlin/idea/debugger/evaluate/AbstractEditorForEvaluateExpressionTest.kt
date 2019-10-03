@@ -33,15 +33,15 @@ import kotlin.test.assertTrue
 
 abstract class AbstractCodeFragmentHighlightingTest : AbstractPsiCheckerTest() {
     override fun doTest(filePath: String) {
-        myFixture.configureByCodeFragment(filePath)
-        checkHighlighting(filePath)
+        myFixture.configureByCodeFragment(fileName())
+        checkHighlighting(testPath())
     }
 
     fun doTestWithImport(filePath: String) {
-        myFixture.configureByCodeFragment(filePath)
+        myFixture.configureByCodeFragment(fileName())
 
         project.executeWriteCommand("Imports insertion") {
-            val fileText = FileUtil.loadFile(File(filePath), true)
+            val fileText = FileUtil.loadFile(testDataFile(), true)
             val file = myFixture.file as KtFile
             InTextDirectivesUtils.findListWithPrefixes(fileText, "// IMPORT: ").forEach {
                 val descriptor = file.resolveImportReference(FqName(it)).singleOrNull()
@@ -50,7 +50,7 @@ abstract class AbstractCodeFragmentHighlightingTest : AbstractPsiCheckerTest() {
             }
         }
 
-        checkHighlighting(filePath)
+        checkHighlighting(testPath())
     }
 
     private fun checkHighlighting(filePath: String) {
@@ -128,7 +128,7 @@ private fun JavaCodeInsightTestFixture.configureByCodeFragment(filePath: String)
     configureByFile(filePath)
 
     val elementAt = file?.findElementAt(caretOffset)
-    val file = createCodeFragment(filePath, elementAt!!)
+    val file = createCodeFragment(testDataPath + File.separator + filePath, elementAt!!)
 
     val typeStr = InTextDirectivesUtils.findStringWithPrefixes(getFile().text, "// ${ExpectedCompletionUtils.RUNTIME_TYPE} ")
     if (typeStr != null) {

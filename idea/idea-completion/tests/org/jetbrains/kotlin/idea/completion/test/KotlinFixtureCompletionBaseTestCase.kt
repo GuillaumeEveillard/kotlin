@@ -26,7 +26,7 @@ abstract class KotlinFixtureCompletionBaseTestCase : KotlinLightCodeInsightFixtu
     protected open fun defaultInvocationCount(): Int = 0
 
     open fun doTest(testPath: String) {
-        setUpFixture(testPath)
+        setUpFixture(fileName())
 
         val fileText = FileUtil.loadFile(File(testPath), true)
         val configured = configureCompilerOptions(fileText, project, module)
