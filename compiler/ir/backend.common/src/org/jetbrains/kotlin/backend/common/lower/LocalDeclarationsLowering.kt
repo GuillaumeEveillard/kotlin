@@ -549,6 +549,7 @@ class LocalDeclarationsLowering(
             oldDeclaration: IrFunction,
             newDeclaration: IrFunction
         ) = ArrayList<IrValueParameter>(capturedValues.size + oldDeclaration.valueParameters.size).apply {
+            val generatedNames = mutableSetOf<Name>()
             capturedValues.mapIndexedTo(this) { i, capturedValue ->
                 val parameterDescriptor = WrappedValueParameterDescriptor()
                 val p = capturedValue.owner
@@ -558,7 +559,7 @@ class LocalDeclarationsLowering(
                     if (p.descriptor is ReceiverParameterDescriptor && newDeclaration is IrConstructor)
                         BOUND_RECEIVER_PARAMETER else BOUND_VALUE_PARAMETER,
                     IrValueParameterSymbolImpl(parameterDescriptor),
-                    suggestNameForCapturedValue(p),
+                    suggestNameForCapturedValue(p, generatedNames),
                     i,
                     p.type,
                     null,
@@ -665,13 +666,13 @@ class LocalDeclarationsLowering(
 
         private fun createFieldsForCapturedValues(localClassContext: LocalClassContext) {
             val classDeclaration = localClassContext.declaration
-
+            val generatedNames = mutableSetOf<Name>()
             localClassContext.closure.capturedValues.forEach { capturedValue ->
 
                 val irField = createFieldForCapturedValue(
                     classDeclaration.startOffset,
                     classDeclaration.endOffset,
-                    suggestNameForCapturedValue(capturedValue.owner),
+                    suggestNameForCapturedValue(capturedValue.owner, generatedNames),
                     Visibilities.PRIVATE,
                     classDeclaration,
                     capturedValue.owner.type
@@ -689,12 +690,18 @@ class LocalDeclarationsLowering(
             }
         }
 
-        private fun suggestNameForCapturedValue(declaration: IrValueDeclaration): Name =
-            if (declaration.name.isSpecial) {
+        private fun suggestNameForCapturedValue(declaration: IrValueDeclaration, existing: MutableSet<Name>): Name {
+            val base = if (declaration.name.isSpecial) {
                 val oldNameStr = declaration.name.asString()
                 oldNameStr.substring(1, oldNameStr.length - 1).synthesizedName
             } else
                 declaration.name.asString().synthesizedName
+            var chosen = base
+            var suffix = 0
+            while (!existing.add(chosen))
+                chosen = Name.identifier("${base}\$${++suffix}")
+            return chosen
+        }
 
 
         private fun collectClosureForLocalDeclarations() {
