@@ -7,6 +7,7 @@ package org.jetbrains.kotlin.idea.inspections
 
 import com.intellij.codeInspection.ProblemsHolder
 import com.intellij.psi.PsiElement
+import org.jetbrains.kotlin.idea.KotlinBundle
 import org.jetbrains.kotlin.idea.inspections.collections.isCalling
 import org.jetbrains.kotlin.idea.util.hasComments
 import org.jetbrains.kotlin.lexer.KtTokens
@@ -18,10 +19,11 @@ import org.jetbrains.kotlin.psi.psiUtil.startOffset
 class ControlFlowWithEmptyBodyInspection : AbstractKotlinInspection() {
     override fun buildVisitor(holder: ProblemsHolder, isOnTheFly: Boolean) = object : KtVisitorVoid() {
         override fun visitIfExpression(expression: KtIfExpression) {
-            if (expression.then.isEmptyBodyOrNull()) {
+            val then = expression.then
+            val elseKeyword = expression.elseKeyword
+            if (then.isEmptyBodyOrNull() && (elseKeyword == null || then?.hasComments() != true)) {
                 holder.registerProblem(expression, expression.ifKeyword)
             }
-            val elseKeyword = expression.elseKeyword
             if (elseKeyword != null && expression.`else`.isEmptyBodyOrNull()) {
                 holder.registerProblem(expression, elseKeyword)
             }
@@ -75,7 +77,7 @@ class ControlFlowWithEmptyBodyInspection : AbstractKotlinInspection() {
         registerProblem(
             expression,
             keyword.textRange.shiftLeft(expression.startOffset),
-            "'$keywordText' has empty body"
+            KotlinBundle.message("0.has.empty.body", keywordText)
         )
     }
 

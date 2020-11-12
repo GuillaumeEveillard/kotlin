@@ -9,8 +9,10 @@ import com.intellij.openapi.Disposable
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
 import org.jetbrains.kotlin.cli.common.arguments.K2JVMCompilerArguments
 import org.jetbrains.kotlin.cli.common.arguments.parseCommandLineArguments
+import org.jetbrains.kotlin.cli.common.arguments.validateArguments
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
+import org.jetbrains.kotlin.cli.common.reportArgumentParseProblems
 import org.jetbrains.kotlin.cli.common.setupCommonArguments
 import org.jetbrains.kotlin.cli.jvm.*
 import org.jetbrains.kotlin.cli.jvm.compiler.EnvironmentConfigFiles
@@ -23,13 +25,25 @@ import org.jetbrains.kotlin.config.CommonConfigurationKeys
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.config.JVMConfigurationKeys
 import org.jetbrains.kotlin.config.JvmTarget
+import org.jetbrains.kotlin.container.StorageComponentContainer
+import org.jetbrains.kotlin.container.useInstance
+import org.jetbrains.kotlin.descriptors.ClassDescriptor
+import org.jetbrains.kotlin.descriptors.FunctionDescriptor
+import org.jetbrains.kotlin.descriptors.ModuleDescriptor
+import org.jetbrains.kotlin.extensions.AnnotationBasedExtension
+import org.jetbrains.kotlin.extensions.StorageComponentContainerContributor
+import org.jetbrains.kotlin.resolve.sam.SamWithReceiverResolver
+import org.jetbrains.kotlin.platform.TargetPlatform
+import org.jetbrains.kotlin.platform.jvm.isJvm
 import org.jetbrains.kotlin.psi.KtFile
+import org.jetbrains.kotlin.psi.KtModifierListOwner
 import org.jetbrains.kotlin.scripting.compiler.plugin.ScriptingCompilerConfigurationComponentRegistrar
 import org.jetbrains.kotlin.scripting.compiler.plugin.dependencies.ScriptsCompilationDependencies
 import org.jetbrains.kotlin.scripting.compiler.plugin.dependencies.collectScriptsCompilationDependencies
 import org.jetbrains.kotlin.scripting.configuration.ScriptingConfigurationKeys
 import org.jetbrains.kotlin.scripting.definitions.ScriptDefinition
 import org.jetbrains.kotlin.scripting.definitions.ScriptDependenciesProvider
+import org.jetbrains.kotlin.scripting.definitions.annotationsForSamWithReceivers
 import kotlin.script.experimental.api.ScriptCompilationConfiguration
 import kotlin.script.experimental.api.compilerOptions
 import kotlin.script.experimental.api.dependencies
@@ -40,14 +54,14 @@ import kotlin.script.experimental.jvm.jvm
 import kotlin.script.experimental.jvm.util.KotlinJars
 import kotlin.script.experimental.jvm.withUpdatedClasspath
 
-internal class SharedScriptCompilationContext(
+class SharedScriptCompilationContext(
     val disposable: Disposable?,
     val baseScriptCompilationConfiguration: ScriptCompilationConfiguration,
     val environment: KotlinCoreEnvironment,
     val ignoredOptionsReportingState: IgnoredOptionsReportingState
 )
 
-internal fun createIsolatedCompilationContext(
+fun createIsolatedCompilationContext(
     baseScriptCompilationConfiguration: ScriptCompilationConfiguration,
     hostConfiguration: ScriptingHostConfiguration,
     messageCollector: ScriptDiagnosticsMessageCollector,
@@ -64,7 +78,7 @@ internal fun createIsolatedCompilationContext(
 
     return SharedScriptCompilationContext(
         disposable, initialScriptCompilationConfiguration, environment, ignoredOptionsReportingState
-    )
+    ).applyConfigure()
 }
 
 internal fun createCompilationContextFromEnvironment(
@@ -83,7 +97,37 @@ internal fun createCompilationContextFromEnvironment(
 
     return SharedScriptCompilationContext(
         null, initialScriptCompilationConfiguration, environment, ignoredOptionsReportingState
-    )
+    ).applyConfigure()
+}
+
+// copied with minor modifications from the sam-with-receiver-cli
+// TODO: consider placing into a shared jar
+internal class ScriptingSamWithReceiverComponentContributor(val annotations: List<String>) : StorageComponentContainerContributor {
+
+    private class Extension(private val annotations: List<String>) : SamWithReceiverResolver, AnnotationBasedExtension {
+        override fun getAnnotationFqNames(modifierListOwner: KtModifierListOwner?) = annotations
+
+        override fun shouldConvertFirstSamParameterToReceiver(function: FunctionDescriptor): Boolean =
+            (function.containingDeclaration as? ClassDescriptor)?.hasSpecialAnnotation(null) ?: false
+    }
+
+    override fun registerModuleComponents(
+        container: StorageComponentContainer, platform: TargetPlatform, moduleDescriptor: ModuleDescriptor
+    ) {
+        if (platform.isJvm()) {
+            container.useInstance(Extension(annotations))
+        }
+    }
+}
+
+internal fun SharedScriptCompilationContext.applyConfigure(): SharedScriptCompilationContext = apply {
+    val samWithReceiverAnnotations = baseScriptCompilationConfiguration[ScriptCompilationConfiguration.annotationsForSamWithReceivers]
+    if (samWithReceiverAnnotations?.isEmpty() == false) {
+        StorageComponentContainerContributor.registerExtension(
+            environment.project,
+            ScriptingSamWithReceiverComponentContributor(samWithReceiverAnnotations.map { it.typeName })
+        )
+    }
 }
 
 internal fun createInitialConfigurations(
@@ -105,6 +149,8 @@ internal fun createInitialConfigurations(
         ScriptDefinition.FromConfigurations(hostConfiguration, scriptCompilationConfiguration, null)
     )
 
+    kotlinCompilerConfiguration.loadPlugins()
+
     initialScriptCompilationConfiguration[ScriptCompilationConfiguration.compilerOptions]?.let { compilerOptions ->
         kotlinCompilerConfiguration.updateWithCompilerOptions(compilerOptions, messageCollector, ignoredOptionsReportingState, false)
     }
@@ -121,6 +167,13 @@ private fun CompilerConfiguration.updateWithCompilerOptions(
     val compilerArguments = K2JVMCompilerArguments()
     parseCommandLineArguments(compilerOptions, compilerArguments)
 
+    validateArguments(compilerArguments.errors)?.let {
+        messageCollector.report(CompilerMessageSeverity.ERROR, it)
+        return
+    }
+
+    messageCollector.reportArgumentParseProblems(compilerArguments)
+
     reportArgumentsIgnoredGenerally(
         compilerArguments,
         messageCollector,
@@ -134,11 +187,15 @@ private fun CompilerConfiguration.updateWithCompilerOptions(
         )
     }
 
+    processPluginsCommandLine(compilerArguments)
+
     setupCommonArguments(compilerArguments)
 
     setupJvmSpecificArguments(compilerArguments)
 
     configureAdvancedJvmOptions(compilerArguments)
+
+    configureKlibPaths(compilerArguments)
 }
 
 private fun ScriptCompilationConfiguration.withUpdatesFromCompilerConfiguration(kotlinCompilerConfiguration: CompilerConfiguration) =
@@ -169,7 +226,8 @@ private fun createInitialCompilerConfiguration(
         // Default value differs from the argument's default (see #KT-29405 and #KT-29319)
         put(JVMConfigurationKeys.JVM_TARGET, JvmTarget.JVM_1_8)
 
-        val jdkHomeFromConfigurations = scriptCompilationConfiguration.getNoDefault(ScriptCompilationConfiguration.jvm.jdkHome)
+        val jdkHomeFromConfigurations = scriptCompilationConfiguration[ScriptCompilationConfiguration.jvm.jdkHome]
+            // TODO: check if this is redundant and/or incorrect since the default is now taken from the host configuration anyway (the one linked to the compilation config)
             ?: hostConfiguration[ScriptingHostConfiguration.jvm.jdkHome]
         if (jdkHomeFromConfigurations != null) {
             messageCollector.report(CompilerMessageSeverity.LOGGING, "Using JDK home directory $jdkHomeFromConfigurations")

@@ -28,6 +28,7 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.util.CachedValue
 import com.intellij.psi.util.CachedValueProvider
 import com.intellij.psi.util.CachedValuesManager
+import org.jetbrains.annotations.TestOnly
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns
 import org.jetbrains.kotlin.cli.common.arguments.*
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
@@ -46,7 +47,7 @@ import org.jetbrains.kotlin.platform.jvm.JvmPlatforms
 import org.jetbrains.kotlin.psi.KtElement
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.UserDataProperty
-import org.jetbrains.kotlin.utils.Jsr305State
+import org.jetbrains.kotlin.utils.JavaTypeEnhancementState
 import java.io.File
 
 val KtElement.platform: TargetPlatform
@@ -58,11 +59,11 @@ val KtElement.builtIns: KotlinBuiltIns
 var KtFile.forcedTargetPlatform: TargetPlatform? by UserDataProperty(Key.create("FORCED_TARGET_PLATFORM"))
 
 fun Module.getAndCacheLanguageLevelByDependencies(): LanguageVersion {
-    val facetSettings = KotlinFacetSettingsProvider.getInstance(project).getInitializedSettings(this)
-    val languageLevel = getLibraryLanguageLevel(this, null, facetSettings.targetPlatform?.idePlatformKind)
+    val facetSettings = KotlinFacetSettingsProvider.getInstance(project)?.getInitializedSettings(this)
+    val languageLevel = getLibraryLanguageLevel(this, null, facetSettings?.targetPlatform?.idePlatformKind)
 
     // Preserve inferred version in facet/project settings
-    if (facetSettings.useProjectSettings) {
+    if (facetSettings == null || facetSettings.useProjectSettings) {
         KotlinCommonCompilerArgumentsHolder.getInstance(project).update {
             if (languageVersion == null) {
                 languageVersion = languageLevel.versionString
@@ -96,7 +97,8 @@ fun Module.getAndCacheLanguageLevelByDependencies(): LanguageVersion {
 fun Module.getStableName(): Name {
     // Here we check ideal situation: we have a facet, and it has 'moduleName' argument.
     // This should be the case for the most environments
-    val arguments = KotlinFacetSettingsProvider.getInstance(project).getInitializedSettings(this).mergedCompilerArguments
+    val settingsProvider = KotlinFacetSettingsProvider.getInstance(project)
+    val arguments = settingsProvider?.getInitializedSettings(this)?.mergedCompilerArguments
     val explicitNameFromArguments = when (arguments) {
         is K2JVMCompilerArguments -> arguments.moduleName
         is K2JSCompilerArguments -> arguments.outputFile?.let { FileUtil.getNameWithoutExtension(File(it)) }
@@ -114,14 +116,18 @@ fun Module.getStableName(): Name {
 @JvmOverloads
 fun Project.getLanguageVersionSettings(
     contextModule: Module? = null,
-    jsr305State: Jsr305State? = null,
+    javaTypeEnhancementState: JavaTypeEnhancementState? = null,
     isReleaseCoroutines: Boolean? = null
 ): LanguageVersionSettings {
-    val arguments = KotlinCommonCompilerArgumentsHolder.getInstance(this).settings
+    val kotlinFacetSettings = contextModule?.let {
+        KotlinFacetSettingsProvider.getInstance(this)?.getInitializedSettings(it)
+    }
+
+    val arguments = kotlinFacetSettings?.compilerArguments ?: KotlinCommonCompilerArgumentsHolder.getInstance(this).settings
     val languageVersion =
-        LanguageVersion.fromVersionString(arguments.languageVersion)
-            ?: contextModule?.getAndCacheLanguageLevelByDependencies()
-            ?: VersionView.RELEASED_VERSION
+        kotlinFacetSettings?.languageLevel ?: LanguageVersion.fromVersionString(arguments.languageVersion)
+        ?: contextModule?.getAndCacheLanguageLevelByDependencies()
+        ?: VersionView.RELEASED_VERSION
     val apiVersion = ApiVersion.createByLanguageVersion(LanguageVersion.fromVersionString(arguments.apiVersion) ?: languageVersion)
     val compilerSettings = KotlinCompilerSettings.getInstance(this).settings
 
@@ -135,7 +141,6 @@ fun Project.getLanguageVersionSettings(
             CoroutineSupport.byCompilerArguments(KotlinCommonCompilerArgumentsHolder.getInstance(this@getLanguageVersionSettings).settings),
             languageVersion
         )
-        configureNewInferenceSupportInIDE(this@getLanguageVersionSettings)
         if (isReleaseCoroutines != null) {
             put(
                 LanguageFeature.ReleaseCoroutines,
@@ -145,7 +150,7 @@ fun Project.getLanguageVersionSettings(
     }
 
     val extraAnalysisFlags = additionalArguments.configureAnalysisFlags(MessageCollector.NONE).apply {
-        if (jsr305State != null) put(JvmAnalysisFlags.jsr305, jsr305State)
+        if (javaTypeEnhancementState != null) put(JvmAnalysisFlags.javaTypeEnhancementState, javaTypeEnhancementState)
         initIDESpecificAnalysisSettings(this@getLanguageVersionSettings)
     }
 
@@ -167,6 +172,28 @@ val Module.languageVersionSettings: LanguageVersionSettings
         return cachedValue.value
     }
 
+@TestOnly
+fun Module.withLanguageVersionSettings(value: LanguageVersionSettings, body: () -> Unit) {
+    val previousLanguageVersionSettings = getUserData(LANGUAGE_VERSION_SETTINGS)
+    try {
+        putUserData(
+            LANGUAGE_VERSION_SETTINGS,
+            CachedValuesManager.getManager(project).createCachedValue(
+                {
+                    CachedValueProvider.Result(
+                        value, ProjectRootModificationTracker.getInstance(project)
+                    )
+                },
+                false
+            )
+        )
+
+        body()
+    } finally {
+        putUserData(LANGUAGE_VERSION_SETTINGS, previousLanguageVersionSettings)
+    }
+}
+
 private fun Module.createCachedValueForLanguageVersionSettings(): CachedValue<LanguageVersionSettings> {
     return CachedValuesManager.getManager(project).createCachedValue({
                                                                          CachedValueProvider.Result(
@@ -179,25 +206,34 @@ private fun Module.createCachedValueForLanguageVersionSettings(): CachedValue<La
 }
 
 private fun Module.shouldUseProjectLanguageVersionSettings(): Boolean {
-    val facetSettingsProvider = KotlinFacetSettingsProvider.getInstance(project)
+    val facetSettingsProvider = KotlinFacetSettingsProvider.getInstance(project) ?: return true
     return facetSettingsProvider.getSettings(this) == null || facetSettingsProvider.getInitializedSettings(this).useProjectSettings
 }
 
 private fun Module.computeLanguageVersionSettings(): LanguageVersionSettings {
     if (shouldUseProjectLanguageVersionSettings()) return project.getLanguageVersionSettings()
 
-    val facetSettings = KotlinFacetSettingsProvider.getInstance(project).getInitializedSettings(this)
-    val languageVersion = facetSettings.languageLevel ?: getAndCacheLanguageLevelByDependencies()
-    val apiVersion = facetSettings.apiLevel ?: languageVersion
+    val facetSettings = KotlinFacetSettingsProvider.getInstance(project)?.getInitializedSettings(this)
 
-    val languageFeatures = facetSettings.mergedCompilerArguments?.configureLanguageFeatures(MessageCollector.NONE)?.apply {
+
+    val languageVersion: LanguageVersion
+    val apiVersion: LanguageVersion
+
+    if (facetSettings != null) {
+        languageVersion = facetSettings.languageLevel ?: getAndCacheLanguageLevelByDependencies()
+        apiVersion = facetSettings.apiLevel ?: languageVersion
+    } else {
+        languageVersion = getAndCacheLanguageLevelByDependencies()
+        apiVersion = languageVersion
+    }
+
+    val languageFeatures = facetSettings?.mergedCompilerArguments?.configureLanguageFeatures(MessageCollector.NONE)?.apply {
         configureCoroutinesSupport(facetSettings.coroutineSupport, languageVersion)
         configureMultiplatformSupport(facetSettings.targetPlatform?.idePlatformKind, this@computeLanguageVersionSettings)
-        configureNewInferenceSupportInIDE(project)
     }.orEmpty()
 
     val analysisFlags = facetSettings
-        .mergedCompilerArguments
+        ?.mergedCompilerArguments
         ?.configureAnalysisFlags(MessageCollector.NONE)
         ?.apply { initIDESpecificAnalysisSettings(project) }
         .orEmpty()
@@ -214,14 +250,17 @@ private fun MutableMap<AnalysisFlag<*>, Any>.initIDESpecificAnalysisSettings(pro
     if (KotlinMultiplatformAnalysisModeComponent.getMode(project) == KotlinMultiplatformAnalysisModeComponent.Mode.COMPOSITE) {
         put(AnalysisFlags.useTypeRefinement, true)
     }
+    if (KotlinLibraryToSourceAnalysisComponent.isEnabled(project)) {
+        put(AnalysisFlags.libraryToSourceAnalysis, true)
+    }
     put(AnalysisFlags.ideMode, true)
 }
 
 val Module.platform: TargetPlatform?
-    get() = KotlinFacetSettingsProvider.getInstance(project).getInitializedSettings(this).targetPlatform ?: project.platform
+    get() = KotlinFacetSettingsProvider.getInstance(project)?.getInitializedSettings(this)?.targetPlatform ?: project.platform
 
 val Module.isHMPPEnabled: Boolean
-    get() = KotlinFacetSettingsProvider.getInstance(project).getInitializedSettings(this).isHmppEnabled
+    get() = KotlinFacetSettingsProvider.getInstance(project)?.getInitializedSettings(this)?.isHmppEnabled ?: false
 
 // FIXME(dsavvinov): this logic is clearly wrong in MPP environment; review and fix
 val Project.platform: TargetPlatform?
@@ -260,14 +299,6 @@ fun MutableMap<LanguageFeature, LanguageFeature.State>.configureMultiplatformSup
 ) {
     if (platformKind.isCommon || module?.implementsCommonModule == true) {
         put(LanguageFeature.MultiPlatformProjects, LanguageFeature.State.ENABLED)
-    }
-}
-
-fun MutableMap<LanguageFeature, LanguageFeature.State>.configureNewInferenceSupportInIDE(
-    project: Project
-) {
-    if (NewInferenceForIDEAnalysisComponent.isEnabled(project)) {
-        putIfAbsent(LanguageFeature.NewInference, LanguageFeature.State.ENABLED)
     }
 }
 

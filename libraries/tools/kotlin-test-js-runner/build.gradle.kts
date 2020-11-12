@@ -4,22 +4,18 @@ description = "Simple Kotlin/JS tests runner with TeamCity reporter"
 
 plugins {
     id("base")
-    id("com.moowork.node") version "1.2.0"
+    id("com.github.node-gradle.node") version "2.2.0"
 }
+
+publish()
 
 val default = configurations.getByName(Dependency.DEFAULT_CONFIGURATION)
-val archives = configurations.getByName(Dependency.ARCHIVES_CONFIGURATION)
-
-default.extendsFrom(archives)
-
-plugins.apply("maven")
-
-convention.getPlugin(MavenPluginConvention::class.java).also {
-    it.conf2ScopeMappings.addMapping(MavenPlugin.RUNTIME_PRIORITY, archives, Conf2ScopeMappingContainer.RUNTIME)
-}
+default.extendsFrom(configurations.publishedRuntime.get())
 
 dependencies {
-    archives(project(":kotlin-test:kotlin-test-js"))
+    if (!kotlinBuildProperties.isInJpsBuildIdeaSync) {
+        publishedRuntime(project(":kotlin-test:kotlin-test-js"))
+    }
 }
 
 node {
@@ -33,6 +29,10 @@ tasks {
         outputs.upToDateWhen {
             projectDir.resolve("node_modules").isDirectory
         }
+        // Without it several yarns can works incorrectly
+        (this as YarnTask).apply {
+            args = args + "--network-concurrency" + "1" + "--mutex" + "network"
+        }
     }
 
     register<YarnTask>("yarnBuild") {
@@ -45,9 +45,14 @@ tasks {
         inputs.dir("src")
         inputs.files(
             "nodejs.ts",
+            "nodejs-idle.ts",
             "karma.ts",
             "karma-kotlin-reporter.js",
-            "nodejs-source-map-support.js",
+            "karma-debug-runner.js",
+            "karma-debug-framework.js",
+            "mocha-kotlin-reporter.js",
+            "tc-log-appender.js",
+            "tc-log-error-webpack.js",
             "package.json",
             "rollup.config.js",
             "tsconfig.json",
@@ -77,12 +82,6 @@ val jar by tasks.creating(Jar::class) {
 }
 
 artifacts {
-    add(
-        "archives",
-        jar.archiveFile.get().asFile
-    ) {
-        builtBy(jar)
-    }
+    add(configurations.archives.name, jar)
+    add(configurations.publishedRuntime.name, jar)
 }
-
-publish()

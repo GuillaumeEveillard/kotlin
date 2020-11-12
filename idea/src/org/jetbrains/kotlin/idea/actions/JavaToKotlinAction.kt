@@ -46,8 +46,11 @@ import com.intellij.psi.PsiErrorElement
 import com.intellij.psi.PsiJavaFile
 import com.intellij.psi.PsiManager
 import com.intellij.psi.util.PsiTreeUtil
+import org.jetbrains.kotlin.idea.KotlinBundle
 import org.jetbrains.kotlin.idea.KotlinFileType
+import org.jetbrains.kotlin.idea.configuration.ExperimentalFeatures
 import org.jetbrains.kotlin.idea.core.util.toPsiFile
+import org.jetbrains.kotlin.idea.formatter.commitAndUnblockDocument
 import org.jetbrains.kotlin.idea.j2k.IdeaJavaToKotlinServices
 import org.jetbrains.kotlin.idea.j2k.J2kPostProcessor
 import org.jetbrains.kotlin.idea.util.application.executeWriteCommand
@@ -76,7 +79,7 @@ class JavaToKotlinAction : AnAction() {
             }
         }
 
-        val title = "Convert Java to Kotlin"
+        val title = KotlinBundle.message("action.j2k.name")
 
         private fun saveResults(javaFiles: List<PsiJavaFile>, convertedTexts: List<String>): List<VirtualFile> {
             val result = ArrayList<VirtualFile>()
@@ -84,13 +87,13 @@ class JavaToKotlinAction : AnAction() {
                 try {
                     val document = PsiDocumentManager.getInstance(psiFile.project).getDocument(psiFile)
                     val errorMessage = when {
-                        document == null -> "couldn't find document for ${psiFile.name}"
-                        !document.isWritable -> "file `${psiFile.name}` is read-only"
+                        document == null -> KotlinBundle.message("action.j2k.error.cant.find.document", psiFile.name)
+                        !document.isWritable -> KotlinBundle.message("action.j2k.error.read.only", psiFile.name)
                         else -> null
                     }
                     if (errorMessage != null) {
-                        MessagesEx.error(psiFile.project, "Failed to save conversion result: $errorMessage")
-                            .showLater()
+                        val message = KotlinBundle.message("action.j2k.error.cant.save.result", errorMessage)
+                        MessagesEx.error(psiFile.project, message).showLater()
                         continue
                     }
                     document!!.replaceString(0, document.textLength, text)
@@ -105,6 +108,7 @@ class JavaToKotlinAction : AnAction() {
                         virtualFile.pathBeforeJ2K = virtualFile.path
                         virtualFile.rename(this, fileName)
                     }
+                    result += virtualFile
                 } catch (e: IOException) {
                     MessagesEx.error(psiFile.project, e.message ?: "").showLater()
                 }
@@ -127,7 +131,7 @@ class JavaToKotlinAction : AnAction() {
                         project,
                         ConverterSettings.defaultSettings,
                         IdeaJavaToKotlinServices
-                    ) else J2kConverterExtension.extension().createJavaToKotlinConverter(
+                    ) else J2kConverterExtension.extension(useNewJ2k = ExperimentalFeatures.NewJ2k.isEnabled).createJavaToKotlinConverter(
                         project,
                         module,
                         ConverterSettings.defaultSettings,
@@ -136,7 +140,7 @@ class JavaToKotlinAction : AnAction() {
                 converterResult = converter.filesToKotlin(
                     javaFiles,
                     if (forceUsingOldJ2k) J2kPostProcessor(formatCode = true)
-                    else J2kConverterExtension.extension().createPostProcessor(formatCode = true),
+                    else J2kConverterExtension.extension(useNewJ2k = ExperimentalFeatures.NewJ2k.isEnabled).createPostProcessor(formatCode = true),
                     progress = ProgressManager.getInstance().progressIndicator!!
                 )
             }
@@ -145,10 +149,13 @@ class JavaToKotlinAction : AnAction() {
                 val conversionTime = measureTimeMillis {
                     convert()
                 }
-                val linesCount = javaFiles.sumBy { StringUtil.getLineBreakCount(it.text) }
+                val linesCount = runReadAction {
+                    javaFiles.sumBy { StringUtil.getLineBreakCount(it.text) }
+                }
+
                 logJ2kConversionStatistics(
                     ConversionType.FILES,
-                    J2kConverterExtension.isNewJ2k,
+                    ExperimentalFeatures.NewJ2k.isEnabled,
                     conversionTime,
                     linesCount,
                     javaFiles.size
@@ -165,11 +172,12 @@ class JavaToKotlinAction : AnAction() {
             ) return emptyList()
 
 
-            var externalCodeUpdate: (() -> Unit)? = null
+            var externalCodeUpdate: ((List<KtFile>) -> Unit)? = null
 
-            if (enableExternalCodeProcessing && converterResult!!.externalCodeProcessing != null) {
-                val question =
-                    "Some code in the rest of your project may require corrections after performing this conversion. Do you want to find such code and correct it too?"
+            val result = converterResult ?: return emptyList()
+            val externalCodeProcessing = result.externalCodeProcessing
+            if (enableExternalCodeProcessing && externalCodeProcessing != null) {
+                val question = KotlinBundle.message("action.j2k.correction.required")
                 if (!askExternalCodeProcessing || (Messages.showYesNoDialog(
                         project,
                         question,
@@ -180,7 +188,7 @@ class JavaToKotlinAction : AnAction() {
                     ProgressManager.getInstance().runProcessWithProgressSynchronously(
                         {
                             runReadAction {
-                                externalCodeUpdate = converterResult!!.externalCodeProcessing!!.prepareWriteOperation(
+                                externalCodeUpdate = externalCodeProcessing.prepareWriteOperation(
                                     ProgressManager.getInstance().progressIndicator!!
                                 )
                             }
@@ -192,20 +200,22 @@ class JavaToKotlinAction : AnAction() {
                 }
             }
 
-            return project.executeWriteCommand("Convert files from Java to Kotlin", null) {
+            return project.executeWriteCommand(KotlinBundle.message("action.j2k.task.name"), null) {
                 CommandProcessor.getInstance().markCurrentCommandAsGlobal(project)
 
-                val newFiles = saveResults(javaFiles, converterResult!!.results)
+                val newFiles = saveResults(javaFiles, result.results)
+                    .map { it.toPsiFile(project) as KtFile }
+                    .onEach { it.commitAndUnblockDocument() }
 
-                externalCodeUpdate?.invoke()
+                externalCodeUpdate?.invoke(newFiles)
 
                 PsiDocumentManager.getInstance(project).commitAllDocuments()
 
                 newFiles.singleOrNull()?.let {
-                    FileEditorManager.getInstance(project).openFile(it, true)
+                    FileEditorManager.getInstance(project).openFile(it.virtualFile, true)
                 }
 
-                newFiles.map { it.toPsiFile(project) as KtFile }
+                newFiles
             }
         }
     }
@@ -218,23 +228,25 @@ class JavaToKotlinAction : AnAction() {
         if (javaFiles.isEmpty()) {
             val statusBar = WindowManager.getInstance().getStatusBar(project)
             JBPopupFactory.getInstance()
-                .createHtmlTextBalloonBuilder("Nothing to convert:<br>No writable Java files found", MessageType.ERROR, null)
+                .createHtmlTextBalloonBuilder(KotlinBundle.message("action.j2k.errornothing.to.convert"), MessageType.ERROR, null)
                 .createBalloon()
                 .showInCenterOf(statusBar.component)
         }
 
-        if (!J2kConverterExtension.extension().doCheckBeforeConversion(project, module)) return
+        if (!J2kConverterExtension.extension(useNewJ2k = ExperimentalFeatures.NewJ2k.isEnabled).doCheckBeforeConversion(project, module)) return
 
         val firstSyntaxError = javaFiles.asSequence().map { PsiTreeUtil.findChildOfType(it, PsiErrorElement::class.java) }.firstOrNull()
 
         if (firstSyntaxError != null) {
             val count = javaFiles.filter { PsiTreeUtil.hasErrorElements(it) }.count()
-            val question = firstSyntaxError.containingFile.name +
-                    (if (count > 1) " and ${count - 1} more Java files" else " file") +
-                    " contain syntax errors, the conversion result may be incorrect"
-
-            val okText = "Investigate Errors"
-            val cancelText = "Proceed with Conversion"
+            assert(count > 0)
+            val firstFileName = firstSyntaxError.containingFile.name
+            val question = when (count) {
+                1 -> KotlinBundle.message("action.j2k.correction.errors.single", firstFileName)
+                else -> KotlinBundle.message("action.j2k.correction.errors.multiple", firstFileName, count - 1)
+            }
+            val okText = KotlinBundle.message("action.j2k.correction.investigate")
+            val cancelText = KotlinBundle.message("action.j2k.correction.proceed")
             if (Messages.showOkCancelDialog(
                     project,
                     question,

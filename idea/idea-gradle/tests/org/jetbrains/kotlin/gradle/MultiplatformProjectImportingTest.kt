@@ -18,17 +18,20 @@ package org.jetbrains.kotlin.gradle
 
 import com.intellij.openapi.roots.DependencyScope
 import com.intellij.openapi.roots.LibraryOrderEntry
+import com.intellij.openapi.roots.ModuleOrderEntry
 import com.intellij.openapi.roots.OrderRootType
-import com.intellij.openapi.roots.impl.ModuleOrderEntryImpl
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.util.PathUtil
 import junit.framework.TestCase
 import org.jetbrains.kotlin.idea.codeInsight.gradle.MultiplePluginVersionGradleImportingTestCase
 import org.jetbrains.kotlin.idea.codeInsight.gradle.facetSettings
+import org.jetbrains.kotlin.idea.codeInsight.gradle.legacyMppImportTestMinVersionForMaster
 import org.jetbrains.kotlin.idea.facet.KotlinFacet
 import org.jetbrains.kotlin.idea.util.rootManager
 import org.jetbrains.kotlin.test.KotlinTestUtils
+import org.jetbrains.plugins.gradle.tooling.annotation.PluginTargetVersions
 import org.junit.Test
+import org.jetbrains.kotlin.idea.util.application.runReadAction
 
 class MultiplatformProjectImportingTest : MultiplePluginVersionGradleImportingTestCase() {
 
@@ -43,20 +46,19 @@ class MultiplatformProjectImportingTest : MultiplePluginVersionGradleImportingTe
         val depOrderEntry = getModule(moduleName)
             .rootManager
             .orderEntries
-            .filterIsInstance<ModuleOrderEntryImpl>()
+            .filterIsInstance<ModuleOrderEntry>()
             .first { it.moduleName == depModuleName }
         assert(depOrderEntry.isProductionOnTestDependency == expected)
     }
 
     private fun assertFileInModuleScope(file: VirtualFile, moduleName: String) {
-        assert(getModule(moduleName).getModuleWithDependenciesAndLibrariesScope(true).contains(file))
-    }
-
-    override fun isApplicableTest(): Boolean {
-        return shouldRunTest(gradleKotlinPluginVersion, gradleVersion)
+        runReadAction {
+            assert(getModule(moduleName).getModuleWithDependenciesAndLibrariesScope(true).contains(file))
+        }
     }
 
     @Test
+    @PluginTargetVersions(gradleVersionForLatestPlugin = legacyMppImportTestMinVersionForMaster)
     fun testPlatformToCommonDependency() {
         val files = configureByFiles()
         importProject()
@@ -77,6 +79,7 @@ class MultiplatformProjectImportingTest : MultiplePluginVersionGradleImportingTe
     }
 
     @Test
+    @PluginTargetVersions(gradleVersionForLatestPlugin = legacyMppImportTestMinVersionForMaster)
     fun testPlatformToCommonExpectedByDependency() {
         configureByFiles()
         importProject()
@@ -91,6 +94,7 @@ class MultiplatformProjectImportingTest : MultiplePluginVersionGradleImportingTe
     }
 
     @Test
+    @PluginTargetVersions(gradleVersionForLatestPlugin = legacyMppImportTestMinVersionForMaster)
     fun testPlatformToCommonDependencyRoot() {
         configureByFiles()
         importProject()
@@ -101,6 +105,7 @@ class MultiplatformProjectImportingTest : MultiplePluginVersionGradleImportingTe
     }
 
     @Test
+    @PluginTargetVersions(gradleVersionForLatestPlugin = legacyMppImportTestMinVersionForMaster)
     fun testMultiProject() {
         configureByFiles()
         importProject()
@@ -115,6 +120,7 @@ class MultiplatformProjectImportingTest : MultiplePluginVersionGradleImportingTe
     }
 
     @Test
+    @PluginTargetVersions(gradleVersionForLatestPlugin = legacyMppImportTestMinVersionForMaster)
     fun testDependenciesReachableViaImpl() {
         configureByFiles()
         importProject()
@@ -131,6 +137,7 @@ class MultiplatformProjectImportingTest : MultiplePluginVersionGradleImportingTe
     }
 
     @Test
+    @PluginTargetVersions(gradleVersionForLatestPlugin = legacyMppImportTestMinVersionForMaster)
     fun testTransitiveImplement() {
         configureByFiles()
 
@@ -179,6 +186,7 @@ class MultiplatformProjectImportingTest : MultiplePluginVersionGradleImportingTe
     }
 
     @Test
+    @PluginTargetVersions(gradleVersionForLatestPlugin = legacyMppImportTestMinVersionForMaster)
     fun testTransitiveImplementWithNonDefaultConfig() {
         configureByFiles()
 
@@ -193,8 +201,8 @@ class MultiplatformProjectImportingTest : MultiplePluginVersionGradleImportingTe
             assertNoModuleDepForModule("project3_main", "project1_main")
 
             TestCase.assertEquals(
-                    listOf("jar:///project2/build/libs/project2-jar.jar!/"),
-                    getDependencyLibraryUrls("project3_main")
+                listOf("jar:///project2/build/libs/project2-jar.jar!/"),
+                getDependencyLibraryUrls("project3_main")
             )
 
             currentExternalProjectSettings.isResolveModulePerSourceSet = false
@@ -214,8 +222,8 @@ class MultiplatformProjectImportingTest : MultiplePluginVersionGradleImportingTe
             assertModuleModuleDepScope("project3", "project1", DependencyScope.COMPILE)
 
             TestCase.assertEquals(
-                    emptyList<String>(),
-                    getDependencyLibraryUrls("project3")
+                emptyList<String>(),
+                getDependencyLibraryUrls("project3")
             )
         } finally {
             currentExternalProjectSettings.isResolveModulePerSourceSet = isResolveModulePerSourceSet
@@ -223,6 +231,7 @@ class MultiplatformProjectImportingTest : MultiplePluginVersionGradleImportingTe
     }
 
     @Test
+    @PluginTargetVersions(gradleVersionForLatestPlugin = legacyMppImportTestMinVersionForMaster)
     fun testTransitiveImplementWithAndroid() {
         configureByFiles()
 
@@ -253,6 +262,7 @@ class MultiplatformProjectImportingTest : MultiplePluginVersionGradleImportingTe
     }
 
     @Test
+    @PluginTargetVersions(gradleVersionForLatestPlugin = legacyMppImportTestMinVersionForMaster)
     fun simpleAndroidAppWithCommonModule() {
         configureByFiles()
 
@@ -281,6 +291,7 @@ class MultiplatformProjectImportingTest : MultiplePluginVersionGradleImportingTe
     }
 
     @Test
+    @PluginTargetVersions(gradleVersionForLatestPlugin = legacyMppImportTestMinVersionForMaster)
     fun testJsTestOutputFile() {
         configureByFiles()
 
@@ -297,6 +308,7 @@ class MultiplatformProjectImportingTest : MultiplePluginVersionGradleImportingTe
     }
 
     @Test
+    @PluginTargetVersions(gradleVersionForLatestPlugin = legacyMppImportTestMinVersionForMaster)
     fun testJsProductionOutputFile() {
         configureByFiles()
         importProject()
@@ -311,7 +323,9 @@ class MultiplatformProjectImportingTest : MultiplePluginVersionGradleImportingTe
         )
     }
 
-    @Test
+
+    //BUNCH(203): @Test enable after updating platform (may require updating android gradle plugin in testdata)
+    @PluginTargetVersions(gradleVersion = "<6.0", pluginVersion = "1.4.10")
     fun testJsTestOutputFileInProjectWithAndroid() {
         configureByFiles()
         createProjectSubFile(

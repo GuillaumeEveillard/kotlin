@@ -5,22 +5,29 @@
 
 package org.jetbrains.kotlin.ide.konan
 
+import com.intellij.execution.actions.RunConfigurationProducer
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.libraries.DummyLibraryProperties
 import com.intellij.openapi.roots.libraries.Library
 import com.intellij.openapi.roots.libraries.PersistentLibraryKind
 import com.intellij.openapi.roots.ui.configuration.libraries.CustomLibraryDescription
-import org.jetbrains.kotlin.ide.konan.analyzer.NativeResolverForModuleFactory
+import com.intellij.psi.util.parentOfType
 import org.jetbrains.kotlin.cli.common.arguments.CommonCompilerArguments
+import org.jetbrains.kotlin.config.KotlinFacetSettingsProvider
 import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
 import org.jetbrains.kotlin.gradle.KotlinPlatform
+import org.jetbrains.kotlin.idea.caches.project.isTestModule
+import org.jetbrains.kotlin.idea.facet.externalSystemNativeMainRunTasks
 import org.jetbrains.kotlin.idea.framework.KotlinLibraryKind
+import org.jetbrains.kotlin.idea.isMainFunction
 import org.jetbrains.kotlin.idea.platform.IdePlatformKindTooling
+import org.jetbrains.kotlin.idea.platform.getGenericTestIcon
+import org.jetbrains.kotlin.idea.util.module
 import org.jetbrains.kotlin.platform.impl.NativeIdePlatformKind
 import org.jetbrains.kotlin.psi.KtFunction
 import org.jetbrains.kotlin.psi.KtNamedDeclaration
 import org.jetbrains.kotlin.platform.TargetPlatform
-import org.jetbrains.kotlin.platform.konan.KonanPlatforms
+import org.jetbrains.kotlin.platform.konan.NativePlatforms
 import javax.swing.Icon
 
 class NativeIdePlatformKindTooling : IdePlatformKindTooling() {
@@ -37,14 +44,46 @@ class NativeIdePlatformKindTooling : IdePlatformKindTooling() {
     override fun getLibraryDescription(project: Project): CustomLibraryDescription? = null
     override fun getLibraryVersionProvider(project: Project): (Library) -> String? = { null }
 
-    override fun getTestIcon(declaration: KtNamedDeclaration, descriptor: DeclarationDescriptor): Icon? = null
+    override fun getTestIcon(declaration: KtNamedDeclaration, descriptor: DeclarationDescriptor): Icon? {
+        return getGenericTestIcon(declaration, descriptor) {
+            val availableRunConfigurations = RunConfigurationProducer
+                .getProducers(declaration.project)
+                .asSequence()
+                .filterIsInstance<KotlinNativeRunConfigurationProvider>()
+                .filter { it.isForTests }
 
-    override fun acceptsAsEntryPoint(function: KtFunction) = false
+            if (availableRunConfigurations.firstOrNull() == null) {
+                return@getGenericTestIcon null
+            }
+
+            return@getGenericTestIcon emptyList()
+        }
+    }
+
+    override fun acceptsAsEntryPoint(function: KtFunction): Boolean {
+        if (!function.isMainFunction()) return false
+        val functionName = function.fqName?.asString() ?: return false
+
+        val module = function.module ?: return false
+        if (module.isTestModule) return false
+
+        val hasRunTask = module.externalSystemNativeMainRunTasks().any { it.entryPoint == functionName }
+        if (!hasRunTask) return false
+
+        val hasRunConfigurations = RunConfigurationProducer
+            .getProducers(function.project)
+            .asSequence()
+            .filterIsInstance<KotlinNativeRunConfigurationProvider>()
+            .any { !it.isForTests }
+        if (!hasRunConfigurations) return false
+
+        return true
+    }
 }
 
 object NativeLibraryKind : PersistentLibraryKind<DummyLibraryProperties>("kotlin.native"), KotlinLibraryKind {
     override val compilerPlatform: TargetPlatform
-        get() = KonanPlatforms.defaultKonanPlatform
+        get() = NativePlatforms.unspecifiedNativePlatform
 
     override fun createDefaultProperties() = DummyLibraryProperties.INSTANCE!!
 }

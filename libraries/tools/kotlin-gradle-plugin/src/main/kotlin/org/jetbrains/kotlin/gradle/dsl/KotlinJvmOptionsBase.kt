@@ -67,6 +67,13 @@ internal abstract class KotlinJvmOptionsBase : org.jetbrains.kotlin.gradle.dsl.K
             jvmTargetField = value
         }
 
+    private var moduleNameField: kotlin.String?? = null
+    override var moduleName: kotlin.String?
+        get() = moduleNameField ?: null
+        set(value) {
+            moduleNameField = value
+        }
+
     private var noJdkField: kotlin.Boolean? = null
     override var noJdk: kotlin.Boolean
         get() = noJdkField ?: false
@@ -88,6 +95,13 @@ internal abstract class KotlinJvmOptionsBase : org.jetbrains.kotlin.gradle.dsl.K
             noStdlibField = value
         }
 
+    private var useIRField: kotlin.Boolean? = null
+    override var useIR: kotlin.Boolean
+        get() = useIRField ?: false
+        set(value) {
+            useIRField = value
+        }
+
     internal open fun updateArguments(args: org.jetbrains.kotlin.cli.common.arguments.K2JVMCompilerArguments) {
         allWarningsAsErrorsField?.let { args.allWarningsAsErrors = it }
         suppressWarningsField?.let { args.suppressWarnings = it }
@@ -98,9 +112,11 @@ internal abstract class KotlinJvmOptionsBase : org.jetbrains.kotlin.gradle.dsl.K
         javaParametersField?.let { args.javaParameters = it }
         jdkHomeField?.let { args.jdkHome = it }
         jvmTargetField?.let { args.jvmTarget = it }
+        moduleNameField?.let { args.moduleName = it }
         noJdkField?.let { args.noJdk = it }
         noReflectField?.let { args.noReflect = it }
         noStdlibField?.let { args.noStdlib = it }
+        useIRField?.let { args.useIR = it }
     }
 }
 
@@ -114,7 +130,9 @@ internal fun org.jetbrains.kotlin.cli.common.arguments.K2JVMCompilerArguments.fi
     javaParameters = false
     jdkHome = null
     jvmTarget = "1.6"
+    moduleName = null
     noJdk = false
     noReflect = true
     noStdlib = true
+    useIR = false
 }

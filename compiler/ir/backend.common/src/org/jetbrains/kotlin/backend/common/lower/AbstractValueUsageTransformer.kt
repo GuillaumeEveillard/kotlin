@@ -97,7 +97,7 @@ abstract class AbstractValueUsageTransformer(
         with(expression) {
             dispatchReceiver = dispatchReceiver?.useAsDispatchReceiver(expression)
             extensionReceiver = extensionReceiver?.useAsExtensionReceiver(expression)
-            for (index in descriptor.valueParameters.indices) {
+            for (index in 0 until valueArgumentsCount) {
                 val argument = getValueArgument(index) ?: continue
                 val parameter = symbol.owner.valueParameters[index]
                 putValueArgument(index, argument.useAsValueArgument(expression, parameter))
@@ -148,10 +148,10 @@ abstract class AbstractValueUsageTransformer(
         return expression
     }
 
-    override fun visitSetVariable(expression: IrSetVariable): IrExpression {
+    override fun visitSetValue(expression: IrSetValue): IrExpression {
         expression.transformChildrenVoid(this)
 
-        expression.value = expression.value.useForVariable(expression.symbol.owner)
+        expression.value = expression.value.useAsValue(expression.symbol.owner)
 
         return expression
     }

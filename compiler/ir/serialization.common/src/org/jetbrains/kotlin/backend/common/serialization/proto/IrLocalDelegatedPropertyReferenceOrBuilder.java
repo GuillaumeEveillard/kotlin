@@ -8,47 +8,47 @@ public interface IrLocalDelegatedPropertyReferenceOrBuilder extends
     org.jetbrains.kotlin.protobuf.MessageLiteOrBuilder {
 
   /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex delegate = 1;</code>
+   * <code>required int64 delegate = 1;</code>
    */
   boolean hasDelegate();
   /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex delegate = 1;</code>
+   * <code>required int64 delegate = 1;</code>
    */
-  org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex getDelegate();
+  long getDelegate();
 
   /**
-   * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex getter = 2;</code>
+   * <code>optional int64 getter = 2;</code>
    */
   boolean hasGetter();
   /**
-   * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex getter = 2;</code>
+   * <code>optional int64 getter = 2;</code>
    */
-  org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex getGetter();
+  long getGetter();
 
   /**
-   * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex setter = 3;</code>
+   * <code>optional int64 setter = 3;</code>
    */
   boolean hasSetter();
   /**
-   * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex setter = 3;</code>
+   * <code>optional int64 setter = 3;</code>
    */
-  org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex getSetter();
+  long getSetter();
 
   /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex symbol = 4;</code>
+   * <code>required int64 symbol = 4;</code>
    */
   boolean hasSymbol();
   /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex symbol = 4;</code>
+   * <code>required int64 symbol = 4;</code>
    */
-  org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex getSymbol();
+  long getSymbol();
 
   /**
-   * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin origin = 5;</code>
+   * <code>optional int32 origin_name = 5;</code>
    */
-  boolean hasOrigin();
+  boolean hasOriginName();
   /**
-   * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin origin = 5;</code>
+   * <code>optional int32 origin_name = 5;</code>
    */
-  org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin getOrigin();
+  int getOriginName();
 }

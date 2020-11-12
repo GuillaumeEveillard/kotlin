@@ -66,12 +66,22 @@ object CompletionFUSCollector {
             data[CompletionEventAttribute] = NotChosen
         }
 
-        KotlinFUSLogger.log(FUSEventGroups.Editor, EventName, data)
+        // sending the data was turned off for 1.4.20+ as we sent enough in 1.4.0
+        // KotlinFUSLogger.log(FUSEventGroups.Editor, EventName, data)
     }
 }
 
 enum class FileTypeStats {
-    KT, GRADLEKTS, KTS
+    KT, GRADLEKTS, KTS;
+
+    companion object {
+        fun parseFromFileName(fileName: String): FileTypeStats? = when {
+            fileName.endsWith(".kt") -> KT
+            fileName.endsWith(".gradle.kts") -> GRADLEKTS
+            fileName.endsWith(".kts") -> KTS
+            else -> null
+        }
+    }
 }
 
 enum class CompletionTypeStats {

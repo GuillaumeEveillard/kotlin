@@ -5,10 +5,7 @@
 
 package org.jetbrains.kotlin.idea.run
 
-import com.intellij.execution.CommonJavaRunConfigurationParameters
-import com.intellij.execution.PsiLocation
-import com.intellij.execution.RunManager
-import com.intellij.execution.RunnerAndConfigurationSettings
+import com.intellij.execution.*
 import com.intellij.execution.actions.ConfigurationContext
 import com.intellij.execution.actions.ConfigurationFromContext
 import com.intellij.execution.actions.RunConfigurationProducer
@@ -23,6 +20,7 @@ import com.intellij.psi.PsiMember
 import com.intellij.psi.PsiMethod
 import com.intellij.psi.util.PsiTreeUtil
 import org.jetbrains.kotlin.asJava.toLightClass
+import org.jetbrains.kotlin.idea.caches.project.isNewMPPModule
 import org.jetbrains.kotlin.idea.util.ProjectRootsUtil
 import org.jetbrains.kotlin.psi.KtClass
 import org.jetbrains.kotlin.psi.KtFile
@@ -32,7 +30,13 @@ import org.jetbrains.kotlin.psi.psiUtil.getParentOfType
 
 class KotlinJUnitRunConfigurationProducer : RunConfigurationProducer<JUnitConfiguration>(JUnitConfigurationType.getInstance()) {
     override fun shouldReplace(self: ConfigurationFromContext, other: ConfigurationFromContext): Boolean {
-        return other.isProducedBy(JUnitConfigurationProducer::class.java) || other.isProducedBy(AbstractPatternBasedConfigurationProducer::class.java)
+        return other.isProducedBy(JUnitConfigurationProducer::class.java)
+                || other.isProducedBy(AbstractPatternBasedConfigurationProducer::class.java)
+    }
+
+    private fun isAvailableInMpp(context: ConfigurationContext): Boolean {
+        val module = context.module
+        return module == null || !module.isNewMPPModule || !forceGradleRunnerInMPP()
     }
 
     override fun isConfigurationFromContext(
@@ -40,6 +44,10 @@ class KotlinJUnitRunConfigurationProducer : RunConfigurationProducer<JUnitConfig
         context: ConfigurationContext
     ): Boolean {
         if (getInstance(PatternConfigurationProducer::class.java).isMultipleElementsSelected(context)) {
+            return false
+        }
+
+        if (!isAvailableInMpp(context)) {
             return false
         }
 
@@ -75,6 +83,10 @@ class KotlinJUnitRunConfigurationProducer : RunConfigurationProducer<JUnitConfig
     ): Boolean {
         if (DumbService.getInstance(context.project).isDumb) return false
 
+        if (!isAvailableInMpp(context)) {
+            return false
+        }
+
         val location = context.location ?: return false
         val leaf = location.psiElement
         val module = context.module?.asJvmModule() ?: return false
@@ -90,7 +102,7 @@ class KotlinJUnitRunConfigurationProducer : RunConfigurationProducer<JUnitConfig
         val method = getTestMethod(leaf)
         if (method != null) {
             configuration.beMethodConfiguration(method.toLocation())
-            JavaRunConfigurationExtensionManagerUtil.getInstance().extendCreatedConfiguration(configuration, location)
+            JavaRunConfigurationExtensionManager.instance.extendCreatedConfiguration(configuration, location)
             configuration.setModule(module)
             return true
         }
@@ -98,7 +110,7 @@ class KotlinJUnitRunConfigurationProducer : RunConfigurationProducer<JUnitConfig
         val testClass = getTestClass(leaf)
         if (testClass != null) {
             configuration.beClassConfiguration(testClass)
-            JavaRunConfigurationExtensionManagerUtil.getInstance().extendCreatedConfiguration(configuration, location)
+            JavaRunConfigurationExtensionManager.instance.extendCreatedConfiguration(configuration, location)
             configuration.setModule(module)
             return true
         }

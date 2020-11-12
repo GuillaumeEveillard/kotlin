@@ -37,14 +37,21 @@ import org.jetbrains.kotlin.descriptors.ClassDescriptor
 import org.jetbrains.kotlin.descriptors.ModuleDescriptor
 import org.jetbrains.kotlin.descriptors.PackageFragmentProvider
 import org.jetbrains.kotlin.descriptors.impl.CompositePackageFragmentProvider
+import org.jetbrains.kotlin.descriptors.impl.ModuleDescriptorImpl
 import org.jetbrains.kotlin.frontend.java.di.createContainerForLazyResolveWithJava
 import org.jetbrains.kotlin.frontend.java.di.initJvmBuiltInsForTopDownAnalysis
 import org.jetbrains.kotlin.frontend.java.di.initialize
 import org.jetbrains.kotlin.incremental.components.ExpectActualTracker
 import org.jetbrains.kotlin.incremental.components.LookupTracker
+import org.jetbrains.kotlin.ir.backend.jvm.jvmLibrariesProvidedByDefault
 import org.jetbrains.kotlin.javac.components.JavacBasedClassFinder
 import org.jetbrains.kotlin.javac.components.JavacBasedSourceElementFactory
 import org.jetbrains.kotlin.javac.components.StubJavaResolverCache
+import org.jetbrains.kotlin.konan.properties.propertyList
+import org.jetbrains.kotlin.konan.util.KlibMetadataFactories
+import org.jetbrains.kotlin.library.KLIB_PROPERTY_DEPENDS
+import org.jetbrains.kotlin.library.KotlinLibrary
+import org.jetbrains.kotlin.library.metadata.NullFlexibleTypeDeserializer
 import org.jetbrains.kotlin.load.java.JavaClassesTracker
 import org.jetbrains.kotlin.load.java.lazy.ModuleClassResolver
 import org.jetbrains.kotlin.load.java.structure.JavaClass
@@ -55,15 +62,19 @@ import org.jetbrains.kotlin.load.kotlin.incremental.IncrementalPackageFragmentPr
 import org.jetbrains.kotlin.load.kotlin.incremental.IncrementalPackagePartProvider
 import org.jetbrains.kotlin.modules.TargetId
 import org.jetbrains.kotlin.name.Name
+import org.jetbrains.kotlin.platform.TargetPlatform
 import org.jetbrains.kotlin.platform.jvm.JvmPlatforms
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.resolve.*
+import org.jetbrains.kotlin.resolve.calls.tower.ImplicitsExtensionsResolutionFilter
 import org.jetbrains.kotlin.resolve.jvm.JavaDescriptorResolver
 import org.jetbrains.kotlin.resolve.jvm.extensions.AnalysisHandlerExtension
 import org.jetbrains.kotlin.resolve.jvm.extensions.PackageFragmentProviderExtension
+import org.jetbrains.kotlin.resolve.jvm.multiplatform.OptionalAnnotationPackageFragmentProvider
 import org.jetbrains.kotlin.resolve.lazy.KotlinCodeAnalyzer
 import org.jetbrains.kotlin.resolve.lazy.declarations.DeclarationProviderFactory
 import org.jetbrains.kotlin.resolve.lazy.declarations.FileBasedDeclarationProviderFactory
+import org.jetbrains.kotlin.storage.LockBasedStorageManager
 import org.jetbrains.kotlin.storage.StorageManager
 import java.util.*
 import kotlin.reflect.KFunction1
@@ -78,11 +89,12 @@ object TopDownAnalyzerFacadeForJVM {
         configuration: CompilerConfiguration,
         packagePartProvider: (GlobalSearchScope) -> PackagePartProvider,
         declarationProviderFactory: (StorageManager, Collection<KtFile>) -> DeclarationProviderFactory = ::FileBasedDeclarationProviderFactory,
-        sourceModuleSearchScope: GlobalSearchScope = newModuleSearchScope(project, files)
+        sourceModuleSearchScope: GlobalSearchScope = newModuleSearchScope(project, files),
+        klibList: List<KotlinLibrary> = emptyList()
     ): AnalysisResult {
         val container = createContainer(
             project, files, trace, configuration, packagePartProvider, declarationProviderFactory, CompilerEnvironment,
-            sourceModuleSearchScope
+            sourceModuleSearchScope, klibList
         )
 
         val module = container.get<ModuleDescriptor>()
@@ -123,9 +135,15 @@ object TopDownAnalyzerFacadeForJVM {
         packagePartProvider: (GlobalSearchScope) -> PackagePartProvider,
         declarationProviderFactory: (StorageManager, Collection<KtFile>) -> DeclarationProviderFactory,
         targetEnvironment: TargetEnvironment = CompilerEnvironment,
-        sourceModuleSearchScope: GlobalSearchScope = newModuleSearchScope(project, files)
+        sourceModuleSearchScope: GlobalSearchScope = newModuleSearchScope(project, files),
+        klibList: List<KotlinLibrary> = emptyList(),
+        implicitsResolutionFilter: ImplicitsExtensionsResolutionFilter? = null
     ): ComponentProvider {
-        val moduleContext = createModuleContext(project, configuration)
+        val jvmTarget = configuration.get(JVMConfigurationKeys.JVM_TARGET, JvmTarget.DEFAULT)
+        val languageVersionSettings = configuration.languageVersionSettings
+        val jvmPlatform = JvmPlatforms.jvmPlatformByTargetVersion(jvmTarget)
+
+        val moduleContext = createModuleContext(project, configuration, jvmPlatform)
 
         val storageManager = moduleContext.storageManager
         val module = moduleContext.module
@@ -139,9 +157,6 @@ object TopDownAnalyzerFacadeForJVM {
 
         val sourceScope = if (separateModules) sourceModuleSearchScope else GlobalSearchScope.allScope(project)
         val moduleClassResolver = SourceOrBinaryModuleClassResolver(sourceScope)
-
-        val jvmTarget = configuration.get(JVMConfigurationKeys.JVM_TARGET, JvmTarget.DEFAULT)
-        val languageVersionSettings = configuration.languageVersionSettings
 
         val fallbackBuiltIns = JvmBuiltIns(storageManager, JvmBuiltIns.Kind.FALLBACK).apply {
             initialize(builtInsModule, languageVersionSettings)
@@ -161,19 +176,20 @@ object TopDownAnalyzerFacadeForJVM {
         val dependencyModule = if (separateModules) {
             val dependenciesContext = ContextForNewModule(
                 moduleContext, Name.special("<dependencies of ${configuration.getNotNull(CommonConfigurationKeys.MODULE_NAME)}>"),
-                module.builtIns, null
+                module.builtIns, jvmPlatform
             )
 
             // Scope for the dependency module contains everything except files present in the scope for the source module
             val dependencyScope = GlobalSearchScope.notScope(sourceScope)
 
             val dependenciesContainer = createContainerForLazyResolveWithJava(
-                JvmPlatforms.jvmPlatformByTargetVersion(jvmTarget),
+                jvmPlatform,
                 dependenciesContext, trace, DeclarationProviderFactory.EMPTY, dependencyScope, moduleClassResolver,
                 targetEnvironment, lookupTracker, expectActualTracker,
                 packagePartProvider(dependencyScope), languageVersionSettings,
                 useBuiltInsProvider = true,
-                configureJavaClassFinder = configureJavaClassFinder
+                configureJavaClassFinder = configureJavaClassFinder,
+                implicitsResolutionFilter = implicitsResolutionFilter
             )
 
             moduleClassResolver.compiledCodeResolver = dependenciesContainer.get()
@@ -183,7 +199,8 @@ object TopDownAnalyzerFacadeForJVM {
                 CompositePackageFragmentProvider(
                     listOf(
                         moduleClassResolver.compiledCodeResolver.packageFragmentProvider,
-                        dependenciesContainer.get<JvmBuiltInsPackageFragmentProvider>()
+                        dependenciesContainer.get<JvmBuiltInsPackageFragmentProvider>(),
+                        dependenciesContainer.get<OptionalAnnotationPackageFragmentProvider>()
                     )
                 )
             )
@@ -200,13 +217,14 @@ object TopDownAnalyzerFacadeForJVM {
         // to be stored in CliLightClassGenerationSupport, and it better be the source one (otherwise light classes would not be found)
         // TODO: get rid of duplicate invocation of CodeAnalyzerInitializer#initialize, or refactor CliLightClassGenerationSupport
         val container = createContainerForLazyResolveWithJava(
-            JvmPlatforms.jvmPlatformByTargetVersion(jvmTarget),
+            jvmPlatform,
             moduleContext, trace, declarationProviderFactory(storageManager, files), sourceScope, moduleClassResolver,
             targetEnvironment, lookupTracker, expectActualTracker,
             partProvider, languageVersionSettings,
             useBuiltInsProvider = true,
             configureJavaClassFinder = configureJavaClassFinder,
-            javaClassTracker = configuration[JVMConfigurationKeys.JAVA_CLASSES_TRACKER]
+            javaClassTracker = configuration[JVMConfigurationKeys.JAVA_CLASSES_TRACKER],
+            implicitsResolutionFilter = implicitsResolutionFilter
         ).apply {
             initJvmBuiltInsForTopDownAnalysis()
             (partProvider as? IncrementalPackagePartProvider)?.deserializationConfiguration = get()
@@ -231,14 +249,19 @@ object TopDownAnalyzerFacadeForJVM {
             extension.getPackageFragmentProvider(project, module, storageManager, trace, null, lookupTracker)
         }
 
+        val klibModules = getKlibModules(klibList, dependencyModule)
+
         // TODO: remove dependencyModule from friends
         module.setDependencies(
-            listOfNotNull(module, dependencyModule, fallbackBuiltIns),
+            listOfNotNull(module, dependencyModule, fallbackBuiltIns) + klibModules,
             if (dependencyModule != null) setOf(dependencyModule) else emptySet()
         )
         module.initialize(
             CompositePackageFragmentProvider(
-                listOf(container.get<KotlinCodeAnalyzer>().packageFragmentProvider) + additionalProviders
+                listOf(
+                    container.get<KotlinCodeAnalyzer>().packageFragmentProvider,
+                    container.get<OptionalAnnotationPackageFragmentProvider>()
+                ) + additionalProviders
             )
         )
 
@@ -275,13 +298,52 @@ object TopDownAnalyzerFacadeForJVM {
         }
     }
 
-    private fun createModuleContext(project: Project, configuration: CompilerConfiguration): MutableModuleContext {
+    private fun createModuleContext(project: Project, configuration: CompilerConfiguration, platform: TargetPlatform?): MutableModuleContext {
         val projectContext = ProjectContext(project, "TopDownAnalyzer for JVM")
         val builtIns = JvmBuiltIns(projectContext.storageManager, JvmBuiltIns.Kind.FROM_DEPENDENCIES)
         return ContextForNewModule(
-            projectContext, Name.special("<${configuration.getNotNull(CommonConfigurationKeys.MODULE_NAME)}>"), builtIns, null
+            projectContext, Name.special("<${configuration.getNotNull(CommonConfigurationKeys.MODULE_NAME)}>"), builtIns, platform
         ).apply {
             builtIns.builtInsModule = module
         }
     }
+}
+
+// From serialization.js....klib.kt
+
+val jvmFactories = KlibMetadataFactories(
+    { storageManager -> JvmBuiltIns(storageManager, JvmBuiltIns.Kind.FROM_DEPENDENCIES) },
+    NullFlexibleTypeDeserializer
+)
+
+private fun getKlibModules(klibList: List<KotlinLibrary>, dependencyModule: ModuleDescriptorImpl?): List<ModuleDescriptorImpl> {
+    val descriptorMap = mutableMapOf<String, ModuleDescriptorImpl>()
+    return klibList.map { library ->
+        descriptorMap.getOrPut(library.libraryName) { getModuleDescriptorByLibrary(library, descriptorMap, dependencyModule) }
+    }
+}
+
+private fun getModuleDescriptorByLibrary(
+    current: KotlinLibrary, mapping:
+    Map<String, ModuleDescriptorImpl>,
+    dependencyModule: ModuleDescriptorImpl?
+): ModuleDescriptorImpl {
+    val module = jvmFactories.DefaultDeserializedDescriptorFactory.createDescriptorOptionalBuiltIns(
+        current,
+        LanguageVersionSettingsImpl.DEFAULT,
+        LockBasedStorageManager.NO_LOCKS,
+        null,
+        packageAccessHandler = null, // TODO: This is a speed optimization used by Native. Don't bother for now.
+        lookupTracker = LookupTracker.DO_NOTHING
+    )
+
+    val dependencies = current.manifestProperties.propertyList(KLIB_PROPERTY_DEPENDS, escapeInQuotes = true).mapNotNull {
+        mapping[it] ?: run {
+            assert(it in jvmLibrariesProvidedByDefault) { "Unknown library $it" }
+            null
+        }
+    }
+
+    module.setDependencies(listOf(module) + dependencies + listOfNotNull(dependencyModule))
+    return module
 }

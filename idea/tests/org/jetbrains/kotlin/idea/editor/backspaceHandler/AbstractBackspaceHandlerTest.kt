@@ -11,6 +11,7 @@ import com.intellij.testFramework.EditorTestUtil
 import com.intellij.testFramework.LightCodeInsightTestCase
 import java.io.File
 
+@Suppress("DEPRECATION")
 abstract class AbstractBackspaceHandlerTest : LightCodeInsightTestCase() {
     fun doTest(path: String) {
         configureFromFileText("a.kt", loadFile(path))

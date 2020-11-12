@@ -25,8 +25,8 @@ import org.jetbrains.kotlin.cli.common.messages.MessageUtil
 import org.jetbrains.kotlin.cli.common.messages.OutputMessageUtil
 import org.jetbrains.kotlin.cli.jvm.compiler.EnvironmentConfigFiles
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
+import org.jetbrains.kotlin.cli.jvm.config.K2MetadataConfigurationKeys
 import org.jetbrains.kotlin.cli.jvm.config.addJvmClasspathRoots
-import org.jetbrains.kotlin.cli.jvm.plugins.PluginCliParser
 import org.jetbrains.kotlin.codegen.CompilationException
 import org.jetbrains.kotlin.config.CommonConfigurationKeys
 import org.jetbrains.kotlin.config.CompilerConfiguration
@@ -49,6 +49,8 @@ class K2MetadataCompiler : CLICompiler<K2MetadataCompilerArguments>() {
         // No specific arguments yet
     }
 
+    override fun MutableList<String>.addPlatformOptions(arguments: K2MetadataCompilerArguments) {}
+
     override fun doExecute(
         arguments: K2MetadataCompilerArguments,
         configuration: CompilerConfiguration,
@@ -57,7 +59,7 @@ class K2MetadataCompiler : CLICompiler<K2MetadataCompilerArguments>() {
     ): ExitCode {
         val collector = configuration.getNotNull(CLIConfigurationKeys.MESSAGE_COLLECTOR_KEY)
 
-        val pluginLoadResult = PluginCliParser.loadPluginsSafe(arguments.pluginClasspaths, arguments.pluginOptions, configuration)
+        val pluginLoadResult = loadPlugins(paths, arguments, configuration)
         if (pluginLoadResult != ExitCode.OK) return pluginLoadResult
 
         for (arg in arguments.freeArgs) {
@@ -70,6 +72,10 @@ class K2MetadataCompiler : CLICompiler<K2MetadataCompilerArguments>() {
         configuration.put(CommonConfigurationKeys.MODULE_NAME, arguments.moduleName ?: JvmProtoBufUtil.DEFAULT_MODULE_NAME)
 
         configuration.put(CLIConfigurationKeys.ALLOW_KOTLIN_PACKAGE, arguments.allowKotlinPackage)
+
+        configuration.putIfNotNull(K2MetadataConfigurationKeys.FRIEND_PATHS, arguments.friendPaths?.toList())
+        configuration.putIfNotNull(K2MetadataConfigurationKeys.REFINES_PATHS, arguments.refinesPaths?.toList())
+
 
         val destination = arguments.destination
         if (destination != null) {
@@ -99,7 +105,11 @@ class K2MetadataCompiler : CLICompiler<K2MetadataCompilerArguments>() {
         try {
             val metadataVersion =
                 configuration.get(CommonConfigurationKeys.METADATA_VERSION) as? BuiltInsBinaryVersion ?: BuiltInsBinaryVersion.INSTANCE
-            MetadataSerializer(metadataVersion, true).serialize(environment)
+            if (arguments.expectActualLinker) {
+                K2MetadataKlibSerializer(metadataVersion).serialize(environment)
+            } else {
+                MetadataSerializer(metadataVersion, true).serialize(environment)
+            }
         } catch (e: CompilationException) {
             collector.report(EXCEPTION, OutputMessageUtil.renderException(e), MessageUtil.psiElementToMessageLocation(e.element))
             return ExitCode.INTERNAL_ERROR

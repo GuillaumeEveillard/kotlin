@@ -5,10 +5,10 @@
 
 package org.jetbrains.kotlin.fir.symbols
 
+import org.jetbrains.kotlin.fir.FirSymbolOwner
 import org.jetbrains.kotlin.fir.declarations.FirDeclaration
-import org.jetbrains.kotlin.types.model.TypeConstructorMarker
 
-interface FirBasedSymbol<E> : TypeConstructorMarker where E : FirDeclaration, E : FirSymbolOwner<E> {
+interface FirBasedSymbol<E> where E : FirSymbolOwner<E>, E : FirDeclaration {
     val fir: E
 
     fun bind(e: E)

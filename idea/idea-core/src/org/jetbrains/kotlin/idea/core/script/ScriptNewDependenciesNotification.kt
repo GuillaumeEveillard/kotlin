@@ -14,8 +14,11 @@ import com.intellij.openapi.util.Ref
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.EditorNotificationPanel
 import com.intellij.ui.HyperlinkLabel
+import org.jetbrains.annotations.TestOnly
 import org.jetbrains.kotlin.idea.core.script.settings.KotlinScriptingSettings
+import org.jetbrains.kotlin.idea.core.util.KotlinIdeaCoreBundle
 import org.jetbrains.kotlin.psi.UserDataProperty
+import org.jetbrains.kotlin.scripting.definitions.findScriptDefinition
 import org.jetbrains.kotlin.scripting.resolve.ScriptCompilationConfigurationWrapper
 
 fun VirtualFile.removeScriptDependenciesNotificationPanel(project: Project) {
@@ -30,7 +33,7 @@ fun VirtualFile.removeScriptDependenciesNotificationPanel(project: Project) {
 fun VirtualFile.addScriptDependenciesNotificationPanel(
     compilationConfigurationResult: ScriptCompilationConfigurationWrapper,
     project: Project,
-    onClick: (ScriptCompilationConfigurationWrapper) -> Unit
+    onClick: () -> Unit
 ) {
     withSelectedEditor(project) { manager ->
         val existingPanel = notificationPanel
@@ -43,10 +46,24 @@ fun VirtualFile.addScriptDependenciesNotificationPanel(
             }
         }
 
-        val panel = NewScriptDependenciesNotificationPanel(onClick, compilationConfigurationResult, project)
+        val panel = NewScriptDependenciesNotificationPanel(onClick, compilationConfigurationResult, project, this@addScriptDependenciesNotificationPanel)
         notificationPanel = panel
         manager.addTopComponent(this, panel)
     }
+}
+
+@TestOnly
+fun VirtualFile.hasSuggestedScriptConfiguration(project: Project): Boolean {
+    return FileEditorManager.getInstance(project).getSelectedEditor(this)?.notificationPanel != null
+}
+
+@TestOnly
+fun VirtualFile.applySuggestedScriptConfiguration(project: Project): Boolean {
+    val notificationPanel = FileEditorManager.getInstance(project).getSelectedEditor(this)?.notificationPanel
+        ?: return false
+    notificationPanel.onClick.invoke()
+
+    return true
 }
 
 private fun VirtualFile.withSelectedEditor(project: Project, f: FileEditor.(FileEditorManager) -> Unit) {
@@ -63,20 +80,23 @@ private fun VirtualFile.withSelectedEditor(project: Project, f: FileEditor.(File
 private var FileEditor.notificationPanel: NewScriptDependenciesNotificationPanel? by UserDataProperty<FileEditor, NewScriptDependenciesNotificationPanel>(Key.create("script.dependencies.panel"))
 
 private class NewScriptDependenciesNotificationPanel(
-    onClick: (ScriptCompilationConfigurationWrapper) -> Unit,
+    val onClick: () -> Unit,
     val compilationConfigurationResult: ScriptCompilationConfigurationWrapper,
-    project: Project
+    project: Project,
+    file: VirtualFile
 ) : EditorNotificationPanel() {
 
     init {
-        setText("There is a new script context available.")
-        createComponentActionLabel("Apply context") {
-            onClick(compilationConfigurationResult)
+        setText(KotlinIdeaCoreBundle.message("notification.text.there.is.a.new.script.context.available"))
+        createComponentActionLabel(KotlinIdeaCoreBundle.message("notification.action.text.apply.context")) {
+            onClick()
         }
 
-        createComponentActionLabel("Enable auto-reload") {
-            onClick(compilationConfigurationResult)
-            KotlinScriptingSettings.getInstance(project).isAutoReloadEnabled = true
+        createComponentActionLabel(KotlinIdeaCoreBundle.message("notification.action.text.enable.auto.reload")) {
+            onClick()
+
+            val scriptDefinition = file.findScriptDefinition(project) ?: return@createComponentActionLabel
+            KotlinScriptingSettings.getInstance(project).setAutoReloadConfigurations(scriptDefinition, true)
         }
     }
 

@@ -28,6 +28,7 @@ import org.jetbrains.kotlin.resolve.calls.smartcasts.DataFlowInfo;
 import org.jetbrains.kotlin.resolve.calls.smartcasts.DataFlowValue;
 import org.jetbrains.kotlin.resolve.calls.tower.KotlinResolutionCallbacksImpl;
 import org.jetbrains.kotlin.resolve.calls.tower.LambdaContextInfo;
+import org.jetbrains.kotlin.resolve.checkers.TrailingCommaChecker;
 import org.jetbrains.kotlin.resolve.descriptorUtil.DescriptorUtilsKt;
 import org.jetbrains.kotlin.resolve.inline.InlineUtil;
 import org.jetbrains.kotlin.resolve.scopes.LexicalScope;
@@ -55,6 +56,7 @@ import static org.jetbrains.kotlin.resolve.BindingContext.*;
 import static org.jetbrains.kotlin.resolve.calls.context.ContextDependency.INDEPENDENT;
 import static org.jetbrains.kotlin.types.TypeUtils.*;
 import static org.jetbrains.kotlin.types.expressions.ControlStructureTypingUtils.*;
+import static org.jetbrains.kotlin.types.expressions.ExpressionTypingServices.getNewInferenceLambdaInfo;
 import static org.jetbrains.kotlin.types.expressions.ExpressionTypingUtils.*;
 
 public class ControlStructureTypingVisitor extends ExpressionTypingVisitor {
@@ -490,6 +492,13 @@ public class ControlStructureTypingVisitor extends ExpressionTypingVisitor {
 
     @Override
     public KotlinTypeInfo visitTryExpression(@NotNull KtTryExpression expression, ExpressionTypingContext typingContext) {
+        expression.getCatchClauses().forEach((catchClause) -> {
+            KtParameterList parameters = catchClause.getParameterList();
+            if (parameters != null && parameters.getStub() == null) {
+                TrailingCommaChecker.INSTANCE.check(parameters.getTrailingComma(), typingContext.trace, typingContext.languageVersionSettings);
+            }
+        });
+
         if (typingContext.languageVersionSettings.supportsFeature(LanguageFeature.NewInference)) {
             return resolveTryExpressionWithNewInference(expression, typingContext);
         }
@@ -887,7 +896,10 @@ public class ControlStructureTypingVisitor extends ExpressionTypingVisitor {
         if (returnedExpression != null) {
             if (newInferenceLambdaInfo != null) {
                 LambdaContextInfo contextInfo;
-                if (returnedExpression instanceof KtLambdaExpression) {
+                KtExpression deparenthesizedReturnExpression = KtPsiUtil.deparenthesize(returnedExpression);
+                if (deparenthesizedReturnExpression instanceof KtLambdaExpression ||
+                    deparenthesizedReturnExpression instanceof KtCallableReferenceExpression
+                ) {
                     contextInfo = new LambdaContextInfo(
                             new KotlinTypeInfo(DONT_CARE, context.dataFlowInfo),
                             null,
@@ -935,17 +947,6 @@ public class ControlStructureTypingVisitor extends ExpressionTypingVisitor {
         LabelResolver.INSTANCE.resolveControlLabel(expression, context);
         return components.dataFlowAnalyzer.createCheckedTypeInfo(components.builtIns.getNothingType(), context, expression).
                 replaceJumpOutPossible(true);
-    }
-
-    @Nullable
-    private static KotlinResolutionCallbacksImpl.LambdaInfo getNewInferenceLambdaInfo(
-            @NotNull ExpressionTypingContext context,
-            @NotNull KtElement function
-    ) {
-        if (function instanceof KtFunction) {
-            return context.trace.get(BindingContext.NEW_INFERENCE_LAMBDA_INFO, (KtFunction) function);
-        }
-        return null;
     }
 
     @NotNull

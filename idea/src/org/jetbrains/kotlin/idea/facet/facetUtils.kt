@@ -1,26 +1,15 @@
 /*
- * Copyright 2010-2017 JetBrains s.r.o.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
 package org.jetbrains.kotlin.idea.facet
 
+import com.intellij.facet.FacetManager
 import com.intellij.openapi.externalSystem.service.project.IdeModifiableModelsProvider
 import com.intellij.openapi.module.Module
 import com.intellij.openapi.projectRoots.JavaSdk
 import com.intellij.openapi.projectRoots.JavaSdkVersion
-import com.intellij.openapi.projectRoots.ProjectJdkTable
 import com.intellij.openapi.roots.ExternalProjectSystemRegistry
 import com.intellij.openapi.roots.ModuleRootManager
 import com.intellij.openapi.roots.ModuleRootModel
@@ -39,11 +28,12 @@ import org.jetbrains.kotlin.idea.core.isAndroidModule
 import org.jetbrains.kotlin.idea.framework.KotlinSdkType
 import org.jetbrains.kotlin.idea.platform.tooling
 import org.jetbrains.kotlin.idea.util.application.runWriteAction
+import org.jetbrains.kotlin.idea.util.getProjectJdkTableSafe
 import org.jetbrains.kotlin.platform.*
 import org.jetbrains.kotlin.platform.compat.toNewPlatform
 import org.jetbrains.kotlin.platform.impl.JvmIdePlatformKind
-import org.jetbrains.kotlin.psi.NotNullableUserDataProperty
 import org.jetbrains.kotlin.platform.jvm.JvmPlatforms
+import org.jetbrains.kotlin.psi.NotNullableUserDataProperty
 import kotlin.reflect.KProperty1
 
 var Module.hasExternalSdkConfiguration: Boolean
@@ -95,7 +85,7 @@ fun KotlinFacetSettings.initializeIfNeeded(
 
     if (shouldInferLanguageLevel) {
         languageLevel = (if (useProjectSettings) LanguageVersion.fromVersionString(commonArguments.languageVersion) else null)
-                ?: getDefaultLanguageLevel(module, compilerVersion, coerceRuntimeLibraryVersionToReleased = compilerVersion == null)
+            ?: getDefaultLanguageLevel(module, compilerVersion, coerceRuntimeLibraryVersionToReleased = compilerVersion == null)
     }
 
     if (shouldInferAPILevel) {
@@ -130,11 +120,11 @@ fun Module.getOrCreateFacet(
     val facetModel = modelsProvider.getModifiableFacetModel(this)
 
     val facet = facetModel.findFacet(KotlinFacetType.TYPE_ID, KotlinFacetType.INSTANCE.defaultFacetName)
-            ?: with(KotlinFacetType.INSTANCE) { createFacet(this@getOrCreateFacet, defaultFacetName, createDefaultConfiguration(), null) }
-                .apply {
-                    val externalSource = externalSystemId?.let { ExternalProjectSystemRegistry.getInstance().getSourceById(it) }
-                    facetModel.addFacet(this, externalSource)
-                }
+        ?: with(KotlinFacetType.INSTANCE) { createFacet(this@getOrCreateFacet, defaultFacetName, createDefaultConfiguration(), null) }
+            .apply {
+                val externalSource = externalSystemId?.let { ExternalProjectSystemRegistry.getInstance().getSourceById(it) }
+                facetModel.addFacet(this, externalSource)
+            }
     facet.configuration.settings.useProjectSettings = useProjectSettings
     if (commitModel) {
         runWriteAction {
@@ -142,6 +132,22 @@ fun Module.getOrCreateFacet(
         }
     }
     return facet
+}
+
+fun Module.hasKotlinFacet() = FacetManager.getInstance(this).getFacetByType(KotlinFacetType.TYPE_ID) != null
+
+fun Module.removeKotlinFacet(
+    modelsProvider: IdeModifiableModelsProvider,
+    commitModel: Boolean = false
+) {
+    val facetModel = modelsProvider.getModifiableFacetModel(this)
+    val facet = facetModel.findFacet(KotlinFacetType.TYPE_ID, KotlinFacetType.INSTANCE.defaultFacetName) ?: return
+    facetModel.removeFacet(facet)
+    if (commitModel) {
+        runWriteAction {
+            facetModel.commit()
+        }
+    }
 }
 
 //method used for non-mpp modules
@@ -188,7 +194,13 @@ fun KotlinFacet.configureFacet(
     module.externalCompilerVersion = compilerVersion
 }
 
-fun Module.externalSystemTestTasks() = KotlinFacetSettingsProvider.getInstance(project).getInitializedSettings(this).externalSystemTestTasks
+private fun Module.externalSystemRunTasks(): List<ExternalSystemRunTask> {
+    val settingsProvider = KotlinFacetSettingsProvider.getInstance(project) ?: return emptyList()
+    return settingsProvider.getInitializedSettings(this).externalSystemRunTasks
+}
+
+fun Module.externalSystemTestRunTasks() = externalSystemRunTasks().filterIsInstance<ExternalSystemTestRunTask>()
+fun Module.externalSystemNativeMainRunTasks() = externalSystemRunTasks().filterIsInstance<ExternalSystemNativeMainRunTask>()
 
 @Suppress("DEPRECATION_ERROR", "DeprecatedCallableAddReplaceWith")
 @Deprecated(
@@ -276,7 +288,7 @@ private fun Module.configureSdkIfPossible(compilerArguments: CommonCompilerArgum
 
     val projectSdk = ProjectRootManager.getInstance(project).projectSdk
     KotlinSdkType.setUpIfNeeded()
-    val allSdks = ProjectJdkTable.getInstance().allJdks
+    val allSdks = getProjectJdkTableSafe().allJdks
     val sdk = if (compilerArguments is K2JVMCompilerArguments) {
         val jdkHome = compilerArguments.jdkHome
         when {
@@ -334,7 +346,13 @@ fun applyCompilerArgumentsToFacet(
         val oldPluginOptions = compilerArguments.pluginOptions
 
         val emptyArgs = compilerArguments::class.java.newInstance()
-        copyBeanTo(arguments, compilerArguments) { property, value -> value != property.get(emptyArgs) }
+
+        // Ad-hoc work-around for android compilations: middle source sets could be actualized up to
+        // Android target, meanwhile compiler arguments are of type K2Metadata
+        // TODO(auskov): merge classpath once compiler arguments are removed from KotlinFacetSettings
+        if (arguments.javaClass == compilerArguments.javaClass) {
+            copyBeanTo(arguments, compilerArguments) { property, value -> value != property.get(emptyArgs) }
+        }
         compilerArguments.pluginOptions = joinPluginOptions(oldPluginOptions, arguments.pluginOptions)
 
         compilerArguments.convertPathsToSystemIndependent()
@@ -360,7 +378,7 @@ fun applyCompilerArgumentsToFacet(
             }
         }
         compilerSettings?.additionalArguments =
-                if (additionalArgumentsString.isNotEmpty()) additionalArgumentsString else CompilerSettings.DEFAULT_ADDITIONAL_ARGUMENTS
+            if (additionalArgumentsString.isNotEmpty()) additionalArgumentsString else CompilerSettings.DEFAULT_ADDITIONAL_ARGUMENTS
 
         with(compilerArguments::class.java.newInstance()) {
             copyFieldsSatisfying(this, compilerArguments) { exposeAsAdditionalArgument(it) || it.name in ignoredFields }

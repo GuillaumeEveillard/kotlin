@@ -108,12 +108,42 @@ enum class LanguageFeature(
     UseGetterNameForPropertyAnnotationsMethodOnJvm(KOTLIN_1_4),
     AllowBreakAndContinueInsideWhen(KOTLIN_1_4),
     MixedNamedArgumentsInTheirOwnPosition(KOTLIN_1_4),
+    ProhibitTailrecOnVirtualMember(KOTLIN_1_4, kind = BUG_FIX),
+    ProperComputationOrderOfTailrecDefaultParameters(KOTLIN_1_4),
+    TrailingCommas(KOTLIN_1_4),
+    ProhibitProtectedCallFromInline(KOTLIN_1_4, kind = BUG_FIX),
+    ProperFinally(KOTLIN_1_4, kind = BUG_FIX),
+    AllowAssigningArrayElementsToVarargsInNamedFormForFunctions(KOTLIN_1_4),
+    AllowNullOperatorsForResult(KOTLIN_1_4),
+    AllowResultInReturnType(KOTLIN_1_4, defaultState = State.DISABLED),
+    PreferJavaFieldOverload(KOTLIN_1_4),
+    AllowContractsForNonOverridableMembers(KOTLIN_1_4),
+    AllowReifiedGenericsInContracts(KOTLIN_1_4),
+    ProperVisibilityForCompanionObjectInstanceField(KOTLIN_1_4, kind = BUG_FIX),
+    DoNotGenerateThrowsForDelegatedKotlinMembers(KOTLIN_1_4),
+    ProperIeee754Comparisons(KOTLIN_1_4, kind = BUG_FIX),
+    FunctionalInterfaceConversion(KOTLIN_1_4, kind = UNSTABLE_FEATURE),
+    GenerateJvmOverloadsAsFinal(KOTLIN_1_4),
+    MangleClassMembersReturningInlineClasses(KOTLIN_1_4),
+    ImproveReportingDiagnosticsOnProtectedMembersOfBaseClass(KOTLIN_1_4, kind = BUG_FIX, defaultState = State.ENABLED),
 
-    ProperVisibilityForCompanionObjectInstanceField(sinceVersion = null, kind = BUG_FIX),
+    ProhibitSpreadOnSignaturePolymorphicCall(KOTLIN_1_5, kind = BUG_FIX),
+    ProhibitInvisibleAbstractMethodsInSuperclasses(KOTLIN_1_5, kind = BUG_FIX),
+    ProhibitNonReifiedArraysAsReifiedTypeArguments(KOTLIN_1_5, kind = BUG_FIX),
+    ProhibitVarargAsArrayAfterSamArgument(KOTLIN_1_5, kind = BUG_FIX),
+    CorrectSourceMappingSyntax(KOTLIN_1_5, kind = UNSTABLE_FEATURE),
+    ProperArrayConventionSetterWithDefaultCalls(KOTLIN_1_5, kind = OTHER),
+    DisableCompatibilityModeForNewInference(KOTLIN_1_5, defaultState = LanguageFeature.State.DISABLED),
+    AdaptedCallableReferenceAgainstReflectiveType(KOTLIN_1_5, defaultState = LanguageFeature.State.DISABLED),
+    ProhibitUsingNullableTypeParameterAgainstNotNullAnnotated(KOTLIN_1_5, kind = BUG_FIX),
+    InferenceCompatibility(KOTLIN_1_5, kind = BUG_FIX),
+    RequiredPrimaryConstructorDelegationCallInEnums(KOTLIN_1_5, kind = BUG_FIX),
+    ForbidAnonymousReturnTypesInPrivateInlineFunctions(KOTLIN_1_5, kind = BUG_FIX),
+    ForbidReferencingToUnderscoreNamedParameterOfCatchBlock(KOTLIN_1_5, kind = BUG_FIX),
+    UseCorrectExecutionOrderForVarargArguments(KOTLIN_1_5, kind = BUG_FIX),
+
     // Temporarily disabled, see KT-27084/KT-22379
     SoundSmartcastFromLoopConditionForLoopAssignedVariables(sinceVersion = null, kind = BUG_FIX),
-
-    ProperIeee754Comparisons(sinceVersion = null, defaultState = State.DISABLED, kind = BUG_FIX),
 
     // Experimental features
 
@@ -125,19 +155,24 @@ enum class LanguageFeature(
 
     MultiPlatformProjects(sinceVersion = null, defaultState = State.DISABLED),
 
-    NewInference(sinceVersion = KOTLIN_1_3, defaultState = State.DISABLED),
+    NewInference(sinceVersion = KOTLIN_1_4),
     // In the next block, features can be enabled only along with new inference
+    SamConversionForKotlinFunctions(sinceVersion = KOTLIN_1_4),
+    SamConversionPerArgument(sinceVersion = KOTLIN_1_4),
+    FunctionReferenceWithDefaultValueAsOtherType(sinceVersion = KOTLIN_1_4),
+    NonStrictOnlyInputTypesChecks(sinceVersion = KOTLIN_1_4),
+    SuspendConversion(sinceVersion = KOTLIN_1_4, defaultState = State.DISABLED),
+    UnitConversion(sinceVersion = KOTLIN_1_4, defaultState = State.DISABLED),
+    OverloadResolutionByLambdaReturnType(sinceVersion = KOTLIN_1_4),
+    ContractsOnCallsWithImplicitReceiver(sinceVersion = KOTLIN_1_4),
+
     BooleanElvisBoundSmartCasts(sinceVersion = KOTLIN_1_3, defaultState = State.DISABLED), // see KT-26357 for details
-    SamConversionForKotlinFunctions(sinceVersion = KOTLIN_1_3, defaultState = State.DISABLED),
-    SamConversionPerArgument(sinceVersion = KOTLIN_1_3, defaultState = State.DISABLED),
-    NewDataFlowForTryExpressions(sinceVersion = KOTLIN_1_3, defaultState = State.DISABLED),
-    FunctionReferenceWithDefaultValueAsOtherType(sinceVersion = KOTLIN_1_3, defaultState = State.DISABLED),
+    NewDataFlowForTryExpressions(sinceVersion = KOTLIN_1_4, defaultState = State.DISABLED),
+    ReferencesToSyntheticJavaProperties(sinceVersion = KOTLIN_1_3, defaultState = State.DISABLED),
     // ------
     // Next features can be enabled regardless of new inference
 
     InlineClasses(sinceVersion = KOTLIN_1_3, defaultState = State.ENABLED_WITH_WARNING, kind = UNSTABLE_FEATURE),
-
-    ContractsOnCallsWithImplicitReceiver(sinceVersion = KOTLIN_1_3, defaultState = State.DISABLED),
     ;
 
     val presentableName: String
@@ -220,16 +255,29 @@ enum class LanguageVersion(val major: Int, val minor: Int) : DescriptionAware {
     KOTLIN_1_1(1, 1),
     KOTLIN_1_2(1, 2),
     KOTLIN_1_3(1, 3),
-    KOTLIN_1_4(1, 4);
+    KOTLIN_1_4(1, 4),
+    KOTLIN_1_5(1, 5),
+    ;
 
     val isStable: Boolean
         get() = this <= LATEST_STABLE
+
+    val isDeprecated: Boolean
+        get() = OLDEST_DEPRECATED <= this && this < FIRST_SUPPORTED
+
+    val isUnsupported: Boolean
+        get() = this < OLDEST_DEPRECATED
 
     val versionString: String
         get() = "$major.$minor"
 
     override val description: String
-        get() = if (isStable) versionString else "$versionString (EXPERIMENTAL)"
+        get() = when {
+            !isStable -> "$versionString (EXPERIMENTAL)"
+            isDeprecated -> "$versionString (DEPRECATED)"
+            isUnsupported -> "$versionString (UNSUPPORTED)"
+            else -> versionString
+        }
 
     override fun toString() = versionString
 
@@ -242,10 +290,13 @@ enum class LanguageVersion(val major: Int, val minor: Int) : DescriptionAware {
             str.split(".", "-").let { if (it.size >= 2) fromVersionString("${it[0]}.${it[1]}") else null }
 
         @JvmField
-        val FIRST_SUPPORTED = KOTLIN_1_2
+        val OLDEST_DEPRECATED = KOTLIN_1_2
 
         @JvmField
-        val LATEST_STABLE = KOTLIN_1_3
+        val FIRST_SUPPORTED = KOTLIN_1_3
+
+        @JvmField
+        val LATEST_STABLE = KOTLIN_1_4
     }
 }
 

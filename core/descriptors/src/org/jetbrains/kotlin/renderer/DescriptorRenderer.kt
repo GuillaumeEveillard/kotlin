@@ -251,6 +251,7 @@ interface DescriptorRendererOptions {
     var parameterNamesInFunctionalTypes: Boolean
     var renderFunctionContracts: Boolean
     var presentableUnresolvedTypes: Boolean
+    var informativeErrorType: Boolean
 }
 
 object ExcludedTypeAnnotations {
@@ -302,6 +303,7 @@ enum class DescriptorRendererModifier(val includeByDefault: Boolean) {
     ACTUAL(true),
     CONST(true),
     LATEINIT(true),
+    FUN(true)
     ;
 
     companion object {

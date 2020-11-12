@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
@@ -8,7 +8,6 @@ package org.jetbrains.kotlin.jvm.abi;
 import com.intellij.testFramework.TestDataPath;
 import org.jetbrains.kotlin.test.JUnit3RunnerWithInners;
 import org.jetbrains.kotlin.test.KotlinTestUtils;
-import org.jetbrains.kotlin.test.TargetBackend;
 import org.jetbrains.kotlin.test.TestMetadata;
 import org.junit.runner.RunWith;
 
@@ -22,11 +21,11 @@ import java.util.regex.Pattern;
 @RunWith(JUnit3RunnerWithInners.class)
 public class CompileAgainstJvmAbiTestGenerated extends AbstractCompileAgainstJvmAbiTest {
     private void runTest(String testDataFilePath) throws Exception {
-        KotlinTestUtils.runTest(this::doTest, TargetBackend.ANY, testDataFilePath);
+        KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
     }
 
     public void testAllFilesPresentInCompile() throws Exception {
-        KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("plugins/jvm-abi-gen/testData/compile"), Pattern.compile("^([^\\.]+)$"), TargetBackend.ANY, false);
+        KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("plugins/jvm-abi-gen/testData/compile"), Pattern.compile("^([^\\.]+)$"), null, false);
     }
 
     @TestMetadata("anonymousObject")
@@ -47,6 +46,11 @@ public class CompileAgainstJvmAbiTestGenerated extends AbstractCompileAgainstJvm
     @TestMetadata("inlineAnonymousObject")
     public void testInlineAnonymousObject() throws Exception {
         runTest("plugins/jvm-abi-gen/testData/compile/inlineAnonymousObject/");
+    }
+
+    @TestMetadata("inlineCapture")
+    public void testInlineCapture() throws Exception {
+        runTest("plugins/jvm-abi-gen/testData/compile/inlineCapture/");
     }
 
     @TestMetadata("inlineReifiedFunction")

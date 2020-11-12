@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2018 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Copyright 2000-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
@@ -7,9 +7,12 @@ package org.jetbrains.kotlin.idea.caches.project
 
 import com.intellij.facet.FacetManager
 import com.intellij.facet.FacetTypeRegistry
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.externalSystem.ExternalSystemModulePropertyManager
 import com.intellij.openapi.externalSystem.service.project.IdeModelsProviderImpl
 import com.intellij.openapi.module.Module
 import com.intellij.openapi.module.ModuleManager
+import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import org.jetbrains.kotlin.analyzer.ModuleInfo
 import org.jetbrains.kotlin.caches.project.cacheInvalidatingOnRootModifications
@@ -53,37 +56,78 @@ private val Module.facetSettings get() = KotlinFacet.get(this)?.configuration?.s
 
 val Module.implementingModules: List<Module>
     get() = cacheInvalidatingOnRootModifications {
+        fun Module.implementingModulesM2(moduleManager: ModuleManager): List<Module> {
+            return moduleManager.getModuleDependentModules(this).filter {
+                it.isNewMPPModule && it.externalProjectId == externalProjectId
+            }
+        }
+
         val moduleManager = ModuleManager.getInstance(project)
 
         when (facetSettings?.mppVersion) {
             null -> emptyList()
 
-            KotlinMultiplatformVersion.M3 -> moduleManager.modules.filter { it.facetSettings?.dependsOnModuleNames?.contains(name) == true }
+            KotlinMultiplatformVersion.M3 -> {
+                val thisModuleStableName = stableModuleName
+                val result = mutableSetOf<Module>()
+                moduleManager.modules.filterTo(result) { it.facetSettings?.dependsOnModuleNames?.contains(thisModuleStableName) == true }
 
-            KotlinMultiplatformVersion.M2 -> moduleManager.getModuleDependentModules(this).filter {
-                it.isNewMPPModule && it.externalProjectId == externalProjectId
+                // HACK: we do not import proper dependsOn for android source-sets in M3,
+                // so add all Android modules that M2-implemention would've added,
+                // to at least not make things worse.
+                // See KT-33809 for details
+                implementingModulesM2(moduleManager).forEach { if (it !in result && it.isAndroidModule()) result += it }
+
+                result.toList()
             }
+
+            KotlinMultiplatformVersion.M2 -> implementingModulesM2(moduleManager)
 
             KotlinMultiplatformVersion.M1 -> moduleManager.modules.filter { name in it.findOldFashionedImplementedModuleNames() }
         }
     }
 
+private val Module.stableModuleName: String
+    get() = ExternalSystemModulePropertyManager.getInstance(this).getLinkedProjectId()
+        ?: name.also {
+            if (!ApplicationManager.getApplication().isUnitTestMode) LOG.error("Don't have a LinkedProjectId for module $this for HMPP!")
+        }
+
+private val Project.modulesByLinkedKey: Map<String, Module>
+    get() = cacheInvalidatingOnRootModifications {
+        val moduleManager = ModuleManager.getInstance(this)
+
+        moduleManager.modules.associateBy { it.stableModuleName }
+    }
+
 val Module.implementedModules: List<Module>
     get() = cacheInvalidatingOnRootModifications {
+        fun Module.implementedModulesM2(): List<Module> {
+            return rootManager.dependencies.filter {
+                // TODO: remove additional android check
+                it.isNewMPPModule &&
+                        it.platform.isCommon() &&
+                        it.externalProjectId == externalProjectId &&
+                        (isAndroidModule() || it.isTestModule == isTestModule)
+            }
+        }
+
         val facetSettings = facetSettings
         when (facetSettings?.mppVersion) {
             null -> emptyList()
 
             KotlinMultiplatformVersion.M3 -> {
-                val modelsProvider = IdeModelsProviderImpl(project)
-                facetSettings.dependsOnModuleNames.mapNotNull { modelsProvider.findIdeModule(it) }
+                facetSettings.dependsOnModuleNames
+                    .mapNotNull { project.modulesByLinkedKey[it] }
+                    // HACK: we do not import proper dependsOn for android source-sets in M3, so fallback to M2-impl
+                    // to at least not make things worse.
+                    // See KT-33809 for details
+                    .plus(if (isAndroidModule()) implementedModulesM2() else emptyList())
+                    .distinct()
             }
 
             KotlinMultiplatformVersion.M2 -> {
-                rootManager.dependencies.filter {
-                    // TODO: remove additional android check
-                    it.isNewMPPModule && it.platform.isCommon() && it.externalProjectId == externalProjectId && (isAndroidModule() || it.isTestModule == isTestModule)
-                }
+                implementedModulesM2()
             }
 
             KotlinMultiplatformVersion.M1 -> {

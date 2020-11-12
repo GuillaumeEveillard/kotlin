@@ -5,15 +5,16 @@
 
 package org.jetbrains.kotlin.ir.expressions
 
-import org.jetbrains.kotlin.descriptors.ClassConstructorDescriptor
 import org.jetbrains.kotlin.ir.symbols.IrConstructorSymbol
 import org.jetbrains.kotlin.ir.types.IrType
 
-interface IrConstructorCall : IrFunctionAccessExpression {
-    override val descriptor: ClassConstructorDescriptor
-    override val symbol: IrConstructorSymbol
+abstract class IrConstructorCall(
+    typeArgumentsCount: Int,
+    valueArgumentsCount: Int,
+) : IrFunctionAccessExpression(typeArgumentsCount, valueArgumentsCount) {
+    abstract override val symbol: IrConstructorSymbol
 
-    val constructorTypeArgumentsCount: Int
+    abstract val constructorTypeArgumentsCount: Int
 
     class ConstructorTypeArguments(internal val irConstructorCall: IrConstructorCall) : AbstractList<IrType?>() {
         override val size: Int

@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2018 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
@@ -7,7 +7,26 @@ package org.jetbrains.kotlin.gradle
 
 import org.gradle.api.tasks.Exec
 import java.io.File
-import kotlin.collections.HashSet
+
+class KotlinSourceSetProto(
+    val name: String,
+    private val languageSettings: KotlinLanguageSettings,
+    private val sourceDirs: Set<File>,
+    private val resourceDirs: Set<File>,
+    private val dependencies: () -> Array<KotlinDependencyId>,
+    val dependsOnSourceSets: Set<String>
+) {
+
+    fun buildKotlinSourceSetImpl(doBuildDependencies: Boolean) = KotlinSourceSetImpl(
+        name,
+        languageSettings,
+        sourceDirs,
+        resourceDirs,
+        if (doBuildDependencies) dependencies.invoke() else emptyArray(),
+        dependsOnSourceSets
+    )
+
+}
 
 class KotlinSourceSetImpl(
     override val name: String,
@@ -47,7 +66,8 @@ data class KotlinLanguageSettingsImpl(
     override val enabledLanguageFeatures: Set<String>,
     override val experimentalAnnotationsInUse: Set<String>,
     override val compilerPluginArguments: Array<String>,
-    override val compilerPluginClasspath: Set<File>
+    override val compilerPluginClasspath: Set<File>,
+    override val freeCompilerArgs: Array<String>
 ) : KotlinLanguageSettings {
     constructor(settings: KotlinLanguageSettings) : this(
         settings.languageVersion,
@@ -56,7 +76,8 @@ data class KotlinLanguageSettingsImpl(
         settings.enabledLanguageFeatures,
         settings.experimentalAnnotationsInUse,
         settings.compilerPluginArguments,
-        settings.compilerPluginClasspath
+        settings.compilerPluginClasspath,
+        settings.freeCompilerArgs
     )
 }
 
@@ -83,7 +104,7 @@ data class KotlinCompilationArgumentsImpl(
 }
 
 data class KotlinNativeCompilationExtensionsImpl(
-    override val konanTarget: String? = null
+    override val konanTarget: String
 ) : KotlinNativeCompilationExtensions {
     constructor(extensions: KotlinNativeCompilationExtensions) : this(extensions.konanTarget)
 }
@@ -96,7 +117,7 @@ data class KotlinCompilationImpl(
     override val arguments: KotlinCompilationArguments,
     override val dependencyClasspath: Array<String>,
     override val kotlinTaskProperties: KotlinTaskProperties,
-    override val nativeExtensions: KotlinNativeCompilationExtensions
+    override val nativeExtensions: KotlinNativeCompilationExtensions?
 ) : KotlinCompilation {
 
     // create deep copy
@@ -112,7 +133,7 @@ data class KotlinCompilationImpl(
         KotlinCompilationArgumentsImpl(kotlinCompilation.arguments),
         kotlinCompilation.dependencyClasspath,
         KotlinTaskPropertiesImpl(kotlinCompilation.kotlinTaskProperties),
-        KotlinNativeCompilationExtensionsImpl(kotlinCompilation.nativeExtensions)
+        kotlinCompilation.nativeExtensions?.let(::KotlinNativeCompilationExtensionsImpl)
     ) {
         disambiguationClassifier = kotlinCompilation.disambiguationClassifier
         platform = kotlinCompilation.platform
@@ -141,7 +162,8 @@ data class KotlinTargetImpl(
     override val disambiguationClassifier: String?,
     override val platform: KotlinPlatform,
     override val compilations: Collection<KotlinCompilation>,
-    override val testTasks: Collection<KotlinTestTask>,
+    override val testRunTasks: Collection<KotlinTestRunTask>,
+    override val nativeMainRunTasks: Collection<KotlinNativeMainRunTask>,
     override val jar: KotlinTargetJar?,
     override val konanArtifacts: List<KonanArtifactModel>
 ) : KotlinTarget {
@@ -157,20 +179,42 @@ data class KotlinTargetImpl(
                 cloningCache[initialCompilation] = it
             }
         }.toList(),
-        target.testTasks.map { initialTestTask ->
-            (cloningCache[initialTestTask] as? KotlinTestTask) ?: KotlinTestTaskImpl(initialTestTask.taskName, initialTestTask.compilationName).also {
-                cloningCache[initialTestTask] = it
-            }
+        target.testRunTasks.map { initialTestTask ->
+            (cloningCache[initialTestTask] as? KotlinTestRunTask)
+                ?: KotlinTestRunTaskImpl(
+                    initialTestTask.taskName,
+                    initialTestTask.compilationName
+                ).also {
+                    cloningCache[initialTestTask] = it
+                }
+        },
+        target.nativeMainRunTasks.map { initialTestTask ->
+            (cloningCache[initialTestTask] as? KotlinNativeMainRunTask)
+                ?: KotlinNativeMainRunTaskImpl(
+                    initialTestTask.taskName,
+                    initialTestTask.compilationName,
+                    initialTestTask.entryPoint,
+                    initialTestTask.debuggable
+                ).also {
+                    cloningCache[initialTestTask] = it
+                }
         },
         KotlinTargetJarImpl(target.jar?.archiveFile),
         target.konanArtifacts.map { KonanArtifactModelImpl(it) }.toList()
     )
 }
 
-data class KotlinTestTaskImpl(
+data class KotlinTestRunTaskImpl(
     override val taskName: String,
     override val compilationName: String
-) : KotlinTestTask
+) : KotlinTestRunTask
+
+data class KotlinNativeMainRunTaskImpl(
+    override val taskName: String,
+    override val compilationName: String,
+    override val entryPoint: String,
+    override val debuggable: Boolean
+) : KotlinNativeMainRunTask
 
 data class ExtraFeaturesImpl(
     override val coroutinesState: String?,
@@ -223,7 +267,13 @@ class KotlinPlatformContainerImpl() : KotlinPlatformContainer {
     override fun supports(simplePlatform: KotlinPlatform): Boolean = platforms.contains(simplePlatform)
 
     override fun addSimplePlatforms(platforms: Collection<KotlinPlatform>) {
-        (myPlatforms ?: HashSet<KotlinPlatform>().apply { myPlatforms = this }).addAll(platforms)
+        (myPlatforms ?: HashSet<KotlinPlatform>().apply { myPlatforms = this }).let {
+            it.addAll(platforms)
+            if (it.contains(KotlinPlatform.COMMON)) {
+                it.clear()
+                it.addAll(defaultCommonPlatform)
+            }
+        }
     }
 }
 

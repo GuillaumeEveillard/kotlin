@@ -23,8 +23,8 @@ class ParametersBuilder private constructor() {
         return addParameter(ParameterInfo(type, skipped, nextParameterOffset, -1, nextValueParameterIndex))
     }
 
-    fun addNextParameter(type: Type, skipped: Boolean): ParameterInfo {
-        return addParameter(ParameterInfo(type, skipped, nextParameterOffset, null, nextValueParameterIndex))
+    fun addNextParameter(type: Type, skipped: Boolean, typeOnStack: Type = type): ParameterInfo {
+        return addParameter(ParameterInfo(type, skipped, nextParameterOffset, null, nextValueParameterIndex, typeOnStack))
     }
 
     fun addNextValueParameter(type: Type, skipped: Boolean, remapValue: StackValue?, parameterIndex: Int): ParameterInfo {
@@ -91,7 +91,7 @@ class ParametersBuilder private constructor() {
     }
 
     fun buildParameters(): Parameters {
-        var nextDeclarationIndex = (params.maxBy { it.declarationIndex }?.declarationIndex ?: -1) + 1
+        var nextDeclarationIndex = (params.maxOfOrNull { it.declarationIndex } ?: -1) + 1
 
         return Parameters(params.map { param ->
             if (param is CapturedParamInfo) {

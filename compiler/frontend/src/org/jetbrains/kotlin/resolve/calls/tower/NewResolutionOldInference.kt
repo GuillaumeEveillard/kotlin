@@ -27,7 +27,9 @@ import org.jetbrains.kotlin.psi.Call
 import org.jetbrains.kotlin.psi.KtReferenceExpression
 import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.BindingTrace
+import org.jetbrains.kotlin.extensions.internal.CandidateInterceptor
 import org.jetbrains.kotlin.resolve.TemporaryBindingTrace
+import org.jetbrains.kotlin.resolve.calls.CallResolver
 import org.jetbrains.kotlin.resolve.calls.CallTransformer
 import org.jetbrains.kotlin.resolve.calls.CandidateResolver
 import org.jetbrains.kotlin.resolve.calls.callResolverUtil.isBinaryRemOperator
@@ -49,10 +51,7 @@ import org.jetbrains.kotlin.resolve.calls.tasks.*
 import org.jetbrains.kotlin.resolve.calls.util.FakeCallableDescriptorForObject
 import org.jetbrains.kotlin.resolve.deprecation.DeprecationResolver
 import org.jetbrains.kotlin.resolve.descriptorUtil.hasDynamicExtensionAnnotation
-import org.jetbrains.kotlin.resolve.scopes.HierarchicalScope
-import org.jetbrains.kotlin.resolve.scopes.LexicalScope
-import org.jetbrains.kotlin.resolve.scopes.MemberScope
-import org.jetbrains.kotlin.resolve.scopes.SyntheticScopes
+import org.jetbrains.kotlin.resolve.scopes.*
 import org.jetbrains.kotlin.resolve.scopes.receivers.*
 import org.jetbrains.kotlin.resolve.scopes.utils.canBeResolvedWithoutDeprecation
 import org.jetbrains.kotlin.types.DeferredType
@@ -74,7 +73,10 @@ class NewResolutionOldInference(
     private val languageVersionSettings: LanguageVersionSettings,
     private val coroutineInferenceSupport: CoroutineInferenceSupport,
     private val deprecationResolver: DeprecationResolver,
-    private val typeApproximator: TypeApproximator
+    private val typeApproximator: TypeApproximator,
+    private val implicitsResolutionFilter: ImplicitsExtensionsResolutionFilter,
+    private val callResolver: CallResolver,
+    private val candidateInterceptor: CandidateInterceptor
 ) {
     sealed class ResolutionKind {
         abstract internal fun createTowerProcessor(
@@ -173,7 +175,7 @@ class NewResolutionOldInference(
 
         val dynamicScope = dynamicCallableDescriptors.createDynamicDescriptorScope(context.call, context.scope.ownerDescriptor)
         val scopeTower = ImplicitScopeTowerImpl(
-            context, dynamicScope, syntheticScopes, context.call.createLookupLocation(), typeApproximator
+            context, dynamicScope, syntheticScopes, context.call.createLookupLocation(), typeApproximator, implicitsResolutionFilter, callResolver, candidateInterceptor
         )
 
         val shouldUseOperatorRem = languageVersionSettings.supportsFeature(LanguageFeature.OperatorRem)
@@ -206,6 +208,8 @@ class NewResolutionOldInference(
                 name = deprecatedName
             )
         }
+
+        candidates = candidateInterceptor.interceptResolvedCandidates(candidates, context, candidateResolver, callResolver, name, kind, tracing)
 
         if (candidates.isEmpty()) {
             if (reportAdditionalDiagnosticIfNoCandidates(context, nameToResolve, kind, scopeTower, detailedReceiver)) {
@@ -353,12 +357,15 @@ class NewResolutionOldInference(
         return true
     }
 
-    private class ImplicitScopeTowerImpl(
-        val resolutionContext: ResolutionContext<*>,
+    public class ImplicitScopeTowerImpl(
+        val resolutionContext: BasicCallResolutionContext,
         override val dynamicScope: MemberScope,
         override val syntheticScopes: SyntheticScopes,
         override val location: LookupLocation,
-        override val typeApproximator: TypeApproximator
+        override val typeApproximator: TypeApproximator,
+        override val implicitsResolutionFilter: ImplicitsExtensionsResolutionFilter,
+        val callResolver: CallResolver,
+        val candidateInterceptor: CandidateInterceptor
     ) : ImplicitScopeTower {
         private val cache = HashMap<ReceiverValue, ReceiverValueWithSmartCastInfo>()
 
@@ -373,9 +380,32 @@ class NewResolutionOldInference(
 
         override val isNewInferenceEnabled: Boolean
             get() = resolutionContext.languageVersionSettings.supportsFeature(LanguageFeature.NewInference)
+
+
+        override fun interceptFunctionCandidates(
+            resolutionScope: ResolutionScope,
+            name: Name,
+            initialResults: Collection<FunctionDescriptor>,
+            location: LookupLocation,
+            dispatchReceiver: ReceiverValueWithSmartCastInfo?,
+            extensionReceiver: ReceiverValueWithSmartCastInfo?
+        ): Collection<FunctionDescriptor> {
+            return candidateInterceptor.interceptFunctionCandidates(initialResults, this, resolutionContext, resolutionScope, callResolver, name, location)
+        }
+
+        override fun interceptVariableCandidates(
+            resolutionScope: ResolutionScope,
+            name: Name,
+            initialResults: Collection<VariableDescriptor>,
+            location: LookupLocation,
+            dispatchReceiver: ReceiverValueWithSmartCastInfo?,
+            extensionReceiver: ReceiverValueWithSmartCastInfo?
+        ): Collection<VariableDescriptor> {
+            return candidateInterceptor.interceptVariableCandidates(initialResults, this, resolutionContext, resolutionScope, callResolver, name, location)
+        }
     }
 
-    internal class MyCandidate(
+    class MyCandidate(
         // Diagnostics that are already computed
         // if resultingApplicability is successful they must be the same as `diagnostics`,
         // otherwise they might be a bit different but result remains unsuccessful
@@ -390,8 +420,12 @@ class NewResolutionOldInference(
         operator fun component1() = diagnostics
         operator fun component2() = resolvedCall
 
-        override val resultingApplicability: ResolutionCandidateApplicability by lazy(LazyThreadSafetyMode.NONE) {
+        override val resultingApplicability: CandidateApplicability by lazy(LazyThreadSafetyMode.NONE) {
             getResultApplicability(diagnostics)
+        }
+
+        override fun addCompatibilityWarning(other: Candidate) {
+            // Only applicable for new inference
         }
 
         override val isSuccessful = getResultApplicability(eagerDiagnostics).isSuccess
@@ -572,22 +606,21 @@ fun transformToReceiverWithSmartCastInfo(
     )
 }
 
-@Deprecated("Temporary error")
-internal class PreviousResolutionError(candidateLevel: ResolutionCandidateApplicability) : ResolutionDiagnostic(candidateLevel)
+internal class PreviousResolutionError(candidateLevel: CandidateApplicability) : ResolutionDiagnostic(candidateLevel)
 
-@Deprecated("Temporary error")
 internal fun createPreviousResolveError(status: ResolutionStatus): PreviousResolutionError? {
     val level = when (status) {
         ResolutionStatus.SUCCESS, ResolutionStatus.INCOMPLETE_TYPE_INFERENCE -> return null
-        ResolutionStatus.UNSAFE_CALL_ERROR -> ResolutionCandidateApplicability.MAY_THROW_RUNTIME_ERROR
-        ResolutionStatus.ARGUMENTS_MAPPING_ERROR -> ResolutionCandidateApplicability.INAPPLICABLE_ARGUMENTS_MAPPING_ERROR
-        ResolutionStatus.RECEIVER_TYPE_ERROR -> ResolutionCandidateApplicability.INAPPLICABLE_WRONG_RECEIVER
-        else -> ResolutionCandidateApplicability.INAPPLICABLE
+        ResolutionStatus.UNSAFE_CALL_ERROR -> CandidateApplicability.MAY_THROW_RUNTIME_ERROR
+        ResolutionStatus.ARGUMENTS_MAPPING_ERROR -> CandidateApplicability.INAPPLICABLE_ARGUMENTS_MAPPING_ERROR
+        ResolutionStatus.RECEIVER_TYPE_ERROR -> CandidateApplicability.INAPPLICABLE_WRONG_RECEIVER
+        else -> CandidateApplicability.INAPPLICABLE
     }
     return PreviousResolutionError(level)
 }
 
-private val BasicCallResolutionContext.isSuperCall: Boolean get() = call.explicitReceiver is SuperCallReceiverValue
+internal fun Call.isCallWithSuperReceiver(): Boolean = explicitReceiver is SuperCallReceiverValue 
+private val BasicCallResolutionContext.isSuperCall: Boolean get() = call.isCallWithSuperReceiver()
 
 internal fun reportResolvedUsingDeprecatedVisibility(
     call: Call,

@@ -7,19 +7,22 @@ plugins {
 }
 
 dependencies {
-    testRuntime(project(":kotlin-reflect"))
     compile(project(":kotlin-noarg-compiler-plugin"))
-    compile(project(":compiler:util"))
-    compile(project(":compiler:frontend"))
-    compile(project(":compiler:frontend.java"))
-    compile(project(":compiler:backend"))
-    compile(project(":compiler:cli-common"))
-    compile(project(":idea"))
-    compile(project(":idea:idea-jps-common"))
-    compile(project(":plugins:annotation-based-compiler-plugins-ide-support"))
+
+    compileOnly(project(":compiler:util"))
+    compileOnly(project(":compiler:frontend"))
+    compileOnly(project(":compiler:frontend.java"))
+    compileOnly(project(":compiler:backend"))
+    compileOnly(project(":compiler:cli-common"))
+    compileOnly(project(":idea"))
+    compileOnly(project(":idea:idea-jps-common"))
+    compileOnly(project(":plugins:annotation-based-compiler-plugins-ide-support"))
     compileOnly(intellijDep())
     excludeInAndroidStudio(rootProject) { compileOnly(intellijPluginDep("maven")) }
     compileOnly(intellijPluginDep("gradle"))
+    compileOnly(project(":idea:kotlin-gradle-tooling"))
+
+    testRuntime(project(":kotlin-reflect"))
 
     testCompileOnly(project(":kotlin-serialization"))
     testCompileOnly(project(":plugins:lint"))
@@ -31,7 +34,6 @@ dependencies {
     testCompileOnly(project(":kotlin-allopen-compiler-plugin"))
     testCompileOnly(project(":allopen-ide-plugin"))
     testCompileOnly(project(":kotlin-imports-dumper-compiler-plugin"))
-    testCompileOnly(project(":kotlin-source-sections-compiler-plugin"))
     testCompileOnly(project(":kotlinx-serialization-compiler-plugin"))
     testCompileOnly(project(":kotlinx-serialization-ide-plugin"))
     testCompileOnly(project(":kotlin-sam-with-receiver-compiler-plugin"))
@@ -42,10 +44,10 @@ dependencies {
     testCompileOnly(intellijDep())
     testRuntimeOnly(intellijDep())
 
-    Platform[192].orHigher {
-        testCompileOnly(intellijPluginDep("java"))
-        testRuntimeOnly(intellijPluginDep("java"))
-    }
+    compileOnly(intellijPluginDep("java"))
+
+    testCompileOnly(intellijPluginDep("java"))
+    testRuntimeOnly(intellijPluginDep("java"))
 }
 
 sourceSets {
@@ -55,6 +57,10 @@ sourceSets {
 
 runtimeJar()
 
-projectTest(parallel = true) {
+sourcesJar()
 
-}
+javadocJar()
+
+projectTest(parallel = true)
+
+apply(from = "$rootDir/gradle/kotlinPluginPublication.gradle.kts")

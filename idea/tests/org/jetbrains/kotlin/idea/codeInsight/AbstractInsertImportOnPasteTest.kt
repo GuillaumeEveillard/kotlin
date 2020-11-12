@@ -7,22 +7,18 @@ package org.jetbrains.kotlin.idea.codeInsight
 
 import com.intellij.openapi.actionSystem.IdeActions
 import com.intellij.openapi.util.io.FileUtil
+import com.intellij.util.ui.UIUtil
 import org.jetbrains.kotlin.idea.AbstractCopyPasteTest
-import org.jetbrains.kotlin.idea.test.PluginTestCaseBase
 import org.jetbrains.kotlin.idea.test.dumpTextWithErrors
 import org.jetbrains.kotlin.idea.util.application.runWriteAction
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.test.InTextDirectivesUtils
 import org.jetbrains.kotlin.test.KotlinTestUtils
-import java.io.File
 
 abstract class AbstractInsertImportOnPasteTest : AbstractCopyPasteTest() {
-    private val BASE_PATH = PluginTestCaseBase.getTestDataPathBase() + "/copyPaste/imports"
-
+    private val TODO_INVESTIGATE_DIRECTIVE = "// TODO: Investigation is required"
     private val NO_ERRORS_DUMP_DIRECTIVE = "// NO_ERRORS_DUMP"
     private val DELETE_DEPENDENCIES_BEFORE_PASTE_DIRECTIVE = "// DELETE_DEPENDENCIES_BEFORE_PASTE"
-
-    override fun getTestDataPath() = BASE_PATH
 
     protected fun doTestCut(path: String) {
         doTestAction(IdeActions.ACTION_CUT, path)
@@ -32,9 +28,8 @@ abstract class AbstractInsertImportOnPasteTest : AbstractCopyPasteTest() {
         doTestAction(IdeActions.ACTION_COPY, path)
     }
 
-    private fun doTestAction(cutOrCopy: String, path: String) {
-        myFixture.testDataPath = BASE_PATH
-        val testFile = File(path)
+    private fun doTestAction(cutOrCopy: String, unused: String) {
+        val testFile = testDataFile()
         val testFileText = FileUtil.loadFile(testFile, true)
         val testFileName = testFile.name
 
@@ -52,18 +47,33 @@ abstract class AbstractInsertImportOnPasteTest : AbstractCopyPasteTest() {
         }
 
         KotlinCopyPasteReferenceProcessor.declarationsToImportSuggested = emptyList()
+        ReviewAddedImports.importsToBeReviewed = emptyList()
+
+        val importsToBeDeletedFile = testDataFile(testFileName.replace(".kt", ".imports_to_delete"))
+        ReviewAddedImports.importsToBeDeleted = if (importsToBeDeletedFile.exists()) {
+            importsToBeDeletedFile.readLines()
+        } else {
+            emptyList()
+        }
 
         configureTargetFile(testFileName.replace(".kt", ".to.kt"))
         performNotWriteEditorAction(IdeActions.ACTION_PASTE)
+        UIUtil.dispatchAllInvocationEvents()
+
+        if (InTextDirectivesUtils.isDirectiveDefined(testFileText, TODO_INVESTIGATE_DIRECTIVE)) {
+            println("File $testFile has $TODO_INVESTIGATE_DIRECTIVE")
+            return
+        }
 
         val namesToImportDump = KotlinCopyPasteReferenceProcessor.declarationsToImportSuggested.joinToString("\n")
-        KotlinTestUtils.assertEqualsToFile(File(path.replace(".kt", ".expected.names")), namesToImportDump)
+        KotlinTestUtils.assertEqualsToFile(testDataFile(testFileName.replace(".kt", ".expected.names")), namesToImportDump)
+        assertEquals(namesToImportDump, ReviewAddedImports.importsToBeReviewed.joinToString("\n"))
 
         val resultFile = myFixture.file as KtFile
         val resultText = if (InTextDirectivesUtils.isDirectiveDefined(testFileText, NO_ERRORS_DUMP_DIRECTIVE))
             resultFile.text
         else
             resultFile.dumpTextWithErrors()
-        KotlinTestUtils.assertEqualsToFile(File(path.replace(".kt", ".expected.kt")), resultText)
+        KotlinTestUtils.assertEqualsToFile(testDataFile(testFileName.replace(".kt", ".expected.kt")), resultText)
     }
 }

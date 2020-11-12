@@ -23,26 +23,32 @@ import com.intellij.psi.PsiNameIdentifierOwner
 import com.intellij.psi.impl.source.tree.LeafPsiElement
 import org.jetbrains.kotlin.asJava.elements.KtLightIdentifier
 import org.jetbrains.kotlin.psi.*
+import org.jetbrains.kotlin.utils.KotlinExceptionWithAttachments
 import org.jetbrains.uast.UElement
 import org.jetbrains.uast.UIdentifier
 import org.jetbrains.uast.kotlin.unwrapFakeFileForLightClass
 import org.jetbrains.uast.toUElement
 
-class UastLightIdentifier(lightOwner: PsiNameIdentifierOwner, ktDeclaration: KtNamedDeclaration?) :
+class UastLightIdentifier(lightOwner: PsiNameIdentifierOwner, ktDeclaration: KtDeclaration?) :
     KtLightIdentifier(lightOwner, ktDeclaration) {
     override fun getContainingFile(): PsiFile = unwrapFakeFileForLightClass(super.getContainingFile())
 }
 
-class KotlinUIdentifier private constructor(
-    override val javaPsi: PsiElement?,
+class KotlinUIdentifier constructor(
+    javaPsiSupplier: () -> PsiElement?,
     override val sourcePsi: PsiElement?,
-    override val psi: PsiElement?,
     givenParent: UElement?
-) : UIdentifier(psi, givenParent) {
+) : UIdentifier(sourcePsi, givenParent) {
+
+    override val javaPsi: PsiElement? by lazy(javaPsiSupplier) // don't know any real need to call it in production
+
+    override val psi: PsiElement?
+        get() = javaPsi ?: sourcePsi
 
     init {
         if (ApplicationManager.getApplication().isUnitTestMode && !acceptableSourcePsi(sourcePsi))
-            throw AssertionError("sourcePsi should be physical leaf element but got $sourcePsi of (${sourcePsi?.javaClass})")
+            throw KotlinExceptionWithAttachments("sourcePsi should be physical leaf element but got $sourcePsi of (${sourcePsi?.javaClass})")
+                .withAttachment("sourcePsi.text", sourcePsi?.text)
     }
 
     private fun acceptableSourcePsi(sourcePsi: PsiElement?): Boolean {
@@ -70,6 +76,6 @@ class KotlinUIdentifier private constructor(
         return null
     }
 
-    constructor(javaPsi: PsiElement?, sourcePsi: PsiElement?, uastParent: UElement?) : this(javaPsi, sourcePsi, javaPsi, uastParent)
-    constructor(sourcePsi: PsiElement?, uastParent: UElement?) : this(null, sourcePsi, sourcePsi, uastParent)
+    constructor(javaPsi: PsiElement?, sourcePsi: PsiElement?, uastParent: UElement?) : this({ javaPsi }, sourcePsi, uastParent)
+    constructor(sourcePsi: PsiElement?, uastParent: UElement?) : this({ null }, sourcePsi, uastParent)
 }

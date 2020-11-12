@@ -1,10 +1,23 @@
+import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType
+import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinUsages
+
 plugins {
-    id "com.moowork.node" version "1.2.0"
+    id "com.github.node-gradle.node" version "2.2.0"
 }
 
 description = 'Kotlin-test integration tests for JS'
 
 apply plugin: 'kotlin-platform-js'
+
+configurations {
+    nodeModules {
+        extendsFrom compile
+        attributes {
+            attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage, KotlinUsages.KOTLIN_RUNTIME))
+            attribute(KotlinPlatformType.attribute, KotlinPlatformType.js)
+        }
+    }
+}
 
 dependencies {
     compile project(':kotlin-test:kotlin-test-js')
@@ -19,10 +32,15 @@ buildDir = "$projectDir/build"
 
 task populateNodeModules(type: Copy, dependsOn: compileKotlin2Js) {
     from compileKotlin2Js.destinationDir
+    dependsOn(configurations.nodeModules)
 
     from {
-        configurations.testCompile.collect {
-            zipTree(it.absolutePath).matching { include '*.js' }
+        configurations.nodeModules.collect {
+             // WORKAROUND: Some JS IR jars were absent and caused this task to fail.
+             // They don't contain .js thus we can skip them.
+             if (it.exists()) {
+                 zipTree(it.absolutePath).matching { include '*.js' }
+             }
         }
     }
 
@@ -30,6 +48,7 @@ task populateNodeModules(type: Copy, dependsOn: compileKotlin2Js) {
 }
 
 node {
+    version = '12.18.0'
     download = true
 }
 

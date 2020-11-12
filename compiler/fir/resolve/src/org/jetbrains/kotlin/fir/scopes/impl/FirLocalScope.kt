@@ -5,48 +5,73 @@
 
 package org.jetbrains.kotlin.fir.scopes.impl
 
-import org.jetbrains.kotlin.fir.FirBackingFieldReference
-import org.jetbrains.kotlin.fir.declarations.FirNamedDeclaration
-import org.jetbrains.kotlin.fir.declarations.FirNamedFunction
+import kotlinx.collections.immutable.PersistentMap
+import kotlinx.collections.immutable.persistentMapOf
+import org.jetbrains.kotlin.fir.NAME_FOR_BACKING_FIELD
 import org.jetbrains.kotlin.fir.declarations.FirProperty
-import org.jetbrains.kotlin.fir.expressions.FirVariable
+import org.jetbrains.kotlin.fir.declarations.FirRegularClass
+import org.jetbrains.kotlin.fir.declarations.FirSimpleFunction
+import org.jetbrains.kotlin.fir.declarations.FirVariable
+import org.jetbrains.kotlin.fir.resolve.PersistentMultimap
+import org.jetbrains.kotlin.fir.resolve.substitution.ConeSubstitutor
+import org.jetbrains.kotlin.fir.scopes.FirContainingNamesAwareScope
 import org.jetbrains.kotlin.fir.scopes.FirScope
-import org.jetbrains.kotlin.fir.scopes.ProcessorAction
-import org.jetbrains.kotlin.fir.symbols.impl.FirCallableSymbol
-import org.jetbrains.kotlin.fir.symbols.impl.FirFunctionSymbol
-import org.jetbrains.kotlin.fir.symbols.impl.FirNamedFunctionSymbol
-import org.jetbrains.kotlin.fir.symbols.impl.FirVariableSymbol
+import org.jetbrains.kotlin.fir.symbols.impl.*
 import org.jetbrains.kotlin.name.Name
 
-class FirLocalScope : FirScope() {
+class FirLocalScope private constructor(
+    val properties: PersistentMap<Name, FirVariableSymbol<*>>,
+    val functions: PersistentMultimap<Name, FirFunctionSymbol<*>>,
+    val classes: PersistentMap<Name, FirRegularClassSymbol>
+) : FirScope(), FirContainingNamesAwareScope {
+    constructor() : this(persistentMapOf(), PersistentMultimap(), persistentMapOf())
 
-    val properties = mutableMapOf<Name, FirVariableSymbol<*>>()
-    val functions = mutableMapOf<Name, FirFunctionSymbol<*>>()
+    fun storeClass(klass: FirRegularClass): FirLocalScope {
+        return FirLocalScope(
+            properties, functions, classes.put(klass.name, klass.symbol)
+        )
+    }
 
-    fun storeDeclaration(declaration: FirNamedDeclaration) {
-        when (declaration) {
-            is FirVariable<*> -> properties[declaration.name] = declaration.symbol
-            is FirNamedFunction -> functions[declaration.name] = declaration.symbol as FirNamedFunctionSymbol
+    fun storeFunction(function: FirSimpleFunction): FirLocalScope {
+        return FirLocalScope(
+            properties, functions.put(function.name, function.symbol as FirNamedFunctionSymbol), classes
+        )
+    }
+
+    fun storeVariable(variable: FirVariable<*>): FirLocalScope {
+        return FirLocalScope(
+            properties.put(variable.name, variable.symbol), functions, classes
+        )
+    }
+
+    fun storeBackingField(property: FirProperty): FirLocalScope {
+        return FirLocalScope(
+            properties.put(NAME_FOR_BACKING_FIELD, property.backingFieldSymbol), functions, classes
+        )
+    }
+
+    override fun processFunctionsByName(name: Name, processor: (FirFunctionSymbol<*>) -> Unit) {
+        for (function in functions[name]) {
+            processor(function)
         }
     }
 
-    fun storeBackingField(property: FirProperty) {
-        properties[FirBackingFieldReference.NAME] = property.backingFieldSymbol
+    override fun processPropertiesByName(name: Name, processor: (FirVariableSymbol<*>) -> Unit) {
+        val property = properties[name]
+        if (property != null) {
+            processor(property)
+        }
     }
 
-    override fun processFunctionsByName(name: Name, processor: (FirFunctionSymbol<*>) -> ProcessorAction): ProcessorAction {
-        val prop = functions[name]
-        if (prop != null) {
-            return processor(prop)
+    override fun processClassifiersByNameWithSubstitution(name: Name, processor: (FirClassifierSymbol<*>, ConeSubstitutor) -> Unit) {
+        val klass = classes[name]
+        if (klass != null) {
+            processor(klass, ConeSubstitutor.Empty)
         }
-        return ProcessorAction.NONE
     }
 
-    override fun processPropertiesByName(name: Name, processor: (FirCallableSymbol<*>) -> ProcessorAction): ProcessorAction {
-        val prop = properties[name]
-        if (prop != null) {
-            return processor(prop)
-        }
-        return ProcessorAction.NONE
-    }
+    override fun mayContainName(name: Name) = properties.containsKey(name) || functions[name].isNotEmpty() || classes.containsKey(name)
+
+    override fun getCallableNames(): Set<Name> = properties.keys + functions.keys
+    override fun getClassifierNames(): Set<Name> = classes.keys
 }

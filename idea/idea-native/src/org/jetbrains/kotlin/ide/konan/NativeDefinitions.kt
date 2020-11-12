@@ -24,12 +24,12 @@ import org.jetbrains.kotlin.idea.KotlinIcons
 
 const val KOTLIN_NATIVE_DEFINITIONS_FILE_EXTENSION = "def"
 const val KOTLIN_NATIVE_DEFINITIONS_ID = "KND"
-const val KOTLIN_NATIVE_DEFINITIONS_NAME = "Kotlin/Native Def"
-const val KOTLIN_NATIVE_DEFINITIONS_DESCRIPTION = "Definitions file for Kotlin/Native C interop"
+
+val KOTLIN_NATIVE_DEFINITIONS_DESCRIPTION get() = KotlinNativeBundle.message("kotlin.native.definitions.description")
 
 object NativeDefinitionsFileType : LanguageFileType(NativeDefinitionsLanguage.INSTANCE) {
 
-    override fun getName(): String = KOTLIN_NATIVE_DEFINITIONS_NAME
+    override fun getName(): String = "Kotlin/Native Def"
 
     override fun getDescription(): String = KOTLIN_NATIVE_DEFINITIONS_DESCRIPTION
 
@@ -43,7 +43,7 @@ class NativeDefinitionsLanguage private constructor() : Language(KOTLIN_NATIVE_D
         val INSTANCE = NativeDefinitionsLanguage()
     }
 
-    override fun getDisplayName(): String = KOTLIN_NATIVE_DEFINITIONS_NAME
+    override fun getDisplayName(): String = KotlinNativeBundle.message("kotlin.native.definitions.short")
 }
 
 class NativeDefinitionsFile(viewProvider: FileViewProvider) : PsiFileBase(viewProvider, NativeDefinitionsLanguage.INSTANCE) {
@@ -125,6 +125,8 @@ object NativeDefinitionsSyntaxHighlighter : SyntaxHighlighterBase() {
             NativeDefinitionsTypes.STRICT_ENUMS -> KNOWN_PROPERTIES_KEYS
             // known extensions
             NativeDefinitionsTypes.ANDROID -> KNOWN_EXTENSIONS_KEYS
+            NativeDefinitionsTypes.ANDROID_X64 -> KNOWN_EXTENSIONS_KEYS
+            NativeDefinitionsTypes.ANDROID_X86 -> KNOWN_EXTENSIONS_KEYS
             NativeDefinitionsTypes.ANDROID_ARM32 -> KNOWN_EXTENSIONS_KEYS
             NativeDefinitionsTypes.ANDROID_ARM64 -> KNOWN_EXTENSIONS_KEYS
             NativeDefinitionsTypes.ARM32 -> KNOWN_EXTENSIONS_KEYS
@@ -144,8 +146,16 @@ object NativeDefinitionsSyntaxHighlighter : SyntaxHighlighterBase() {
             NativeDefinitionsTypes.MIPS32 -> KNOWN_EXTENSIONS_KEYS
             NativeDefinitionsTypes.MIPSEL32 -> KNOWN_EXTENSIONS_KEYS
             NativeDefinitionsTypes.OSX -> KNOWN_EXTENSIONS_KEYS
+            NativeDefinitionsTypes.TVOS -> KNOWN_EXTENSIONS_KEYS
+            NativeDefinitionsTypes.TVOS_ARM64 -> KNOWN_EXTENSIONS_KEYS
+            NativeDefinitionsTypes.TVOS_X64 -> KNOWN_EXTENSIONS_KEYS
             NativeDefinitionsTypes.WASM -> KNOWN_EXTENSIONS_KEYS
             NativeDefinitionsTypes.WASM32 -> KNOWN_EXTENSIONS_KEYS
+            NativeDefinitionsTypes.WATCHOS -> KNOWN_EXTENSIONS_KEYS
+            NativeDefinitionsTypes.WATCHOS_ARM32 -> KNOWN_EXTENSIONS_KEYS
+            NativeDefinitionsTypes.WATCHOS_ARM64 -> KNOWN_EXTENSIONS_KEYS
+            NativeDefinitionsTypes.WATCHOS_X64 -> KNOWN_EXTENSIONS_KEYS
+            NativeDefinitionsTypes.WATCHOS_X86 -> KNOWN_EXTENSIONS_KEYS
             NativeDefinitionsTypes.X64 -> KNOWN_EXTENSIONS_KEYS
             else -> EMPTY_KEYS
         }

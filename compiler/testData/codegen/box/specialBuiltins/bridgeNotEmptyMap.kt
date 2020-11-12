@@ -1,4 +1,3 @@
-// IGNORE_BACKEND: JVM_IR
 // IGNORE_BACKEND: JS
 
 private object NotEmptyMap : MutableMap<Any, Int> {

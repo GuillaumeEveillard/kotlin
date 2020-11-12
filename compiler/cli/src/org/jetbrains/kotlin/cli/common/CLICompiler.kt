@@ -24,24 +24,28 @@ import org.jetbrains.kotlin.cli.common.ExitCode.COMPILATION_ERROR
 import org.jetbrains.kotlin.cli.common.ExitCode.INTERNAL_ERROR
 import org.jetbrains.kotlin.cli.common.arguments.CommonCompilerArguments
 import org.jetbrains.kotlin.cli.common.environment.setIdeaIoUseFallback
+import org.jetbrains.kotlin.cli.common.messages.*
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity.INFO
-import org.jetbrains.kotlin.cli.common.messages.GroupingMessageCollector
-import org.jetbrains.kotlin.cli.common.messages.MessageCollector
-import org.jetbrains.kotlin.cli.common.messages.MessageCollectorUtil
-import org.jetbrains.kotlin.cli.common.messages.MessageRenderer
+import org.jetbrains.kotlin.cli.jvm.plugins.PluginCliParser
+import org.jetbrains.kotlin.compiler.plugin.ComponentRegistrar
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.config.Services
 import org.jetbrains.kotlin.metadata.deserialization.BinaryVersion
 import org.jetbrains.kotlin.progress.CompilationCanceledException
 import org.jetbrains.kotlin.progress.CompilationCanceledStatus
+import org.jetbrains.kotlin.progress.IncrementalNextRoundException
 import org.jetbrains.kotlin.progress.ProgressIndicatorAndCompilationCanceledStatus
 import org.jetbrains.kotlin.utils.KotlinPaths
+import org.jetbrains.kotlin.utils.PathUtil
 import java.io.File
 import java.io.PrintStream
+import java.util.ArrayList
 
 abstract class CLICompiler<A : CommonCompilerArguments> : CLITool<A>() {
 
     protected abstract val performanceManager: CommonCompilerPerformanceManager
+
+    protected open fun createPerformanceManager(arguments: A, services: Services): CommonCompilerPerformanceManager = performanceManager
 
     // Used in CompilerRunnerUtil#invokeExecMethod, in Eclipse plugin (KotlinCLICompiler) and in kotlin-gradle-plugin (GradleCompilerRunner)
     fun execAndOutputXml(errStream: PrintStream, services: Services, vararg args: String): ExitCode {
@@ -54,7 +58,7 @@ abstract class CLICompiler<A : CommonCompilerArguments> : CLITool<A>() {
     }
 
     public override fun execImpl(messageCollector: MessageCollector, services: Services, arguments: A): ExitCode {
-        val performanceManager = performanceManager
+        val performanceManager = createPerformanceManager(arguments, services)
         if (arguments.reportPerf || arguments.dumpPerf != null) {
             performanceManager.enableCollectingPerformanceStatistics()
         }
@@ -85,8 +89,10 @@ abstract class CLICompiler<A : CommonCompilerArguments> : CLITool<A>() {
 
                 performanceManager.notifyCompilationFinished()
                 if (arguments.reportPerf) {
-                    performanceManager.getMeasurementResults()
-                        .forEach { it -> configuration.get(MESSAGE_COLLECTOR_KEY)!!.report(INFO, "PERF: " + it.render(), null) }
+                    collector.report(INFO, "PERF: " + performanceManager.getTargetInfo())
+                    for (measurement in performanceManager.getMeasurementResults()) {
+                        collector.report(INFO, "PERF: " + measurement.render(), null)
+                    }
                 }
 
                 if (arguments.dumpPerf != null) {
@@ -95,12 +101,12 @@ abstract class CLICompiler<A : CommonCompilerArguments> : CLITool<A>() {
 
                 return if (collector.hasErrors()) COMPILATION_ERROR else code
             } catch (e: CompilationCanceledException) {
-                collector.report(INFO, "Compilation was canceled", null)
+                collector.reportCompilationCancelled(e)
                 return ExitCode.OK
             } catch (e: RuntimeException) {
                 val cause = e.cause
                 if (cause is CompilationCanceledException) {
-                    collector.report(INFO, "Compilation was canceled", null)
+                    collector.reportCompilationCancelled(cause)
                     return ExitCode.OK
                 } else {
                     throw e
@@ -115,6 +121,12 @@ abstract class CLICompiler<A : CommonCompilerArguments> : CLITool<A>() {
             return INTERNAL_ERROR
         } finally {
             collector.flush()
+        }
+    }
+
+    private fun MessageCollector.reportCompilationCancelled(e: CompilationCanceledException) {
+        if (e !is IncrementalNextRoundException) {
+            report(INFO, "Compilation was canceled", null)
         }
     }
 
@@ -134,5 +146,51 @@ abstract class CLICompiler<A : CommonCompilerArguments> : CLITool<A>() {
         rootDisposable: Disposable,
         paths: KotlinPaths?
     ): ExitCode
+
+    protected abstract fun MutableList<String>.addPlatformOptions(arguments: A)
+
+    protected fun loadPlugins(paths: KotlinPaths?, arguments: A, configuration: CompilerConfiguration): ExitCode {
+        var pluginClasspaths: Iterable<String> = arguments.pluginClasspaths?.asIterable() ?: emptyList()
+        val pluginOptions = arguments.pluginOptions?.toMutableList() ?: ArrayList()
+
+        if (!arguments.disableDefaultScriptingPlugin) {
+            val explicitOrLoadedScriptingPlugin =
+                pluginClasspaths.any { File(it).name.startsWith(PathUtil.KOTLIN_SCRIPTING_COMPILER_PLUGIN_NAME) } ||
+                        tryLoadScriptingPluginFromCurrentClassLoader(configuration)
+            if (!explicitOrLoadedScriptingPlugin) {
+                val kotlinPaths = paths ?: PathUtil.kotlinPathsForCompiler
+                val libPath = kotlinPaths.libPath.takeIf { it.exists() && it.isDirectory } ?: File(".")
+                val (jars, missingJars) =
+                    PathUtil.KOTLIN_SCRIPTING_PLUGIN_CLASSPATH_JARS.map { File(libPath, it) }.partition { it.exists() }
+                if (missingJars.isEmpty()) {
+                    pluginClasspaths = jars.map { it.canonicalPath } + pluginClasspaths
+                } else {
+                    val messageCollector = configuration.getNotNull(MESSAGE_COLLECTOR_KEY)
+                    messageCollector.report(
+                        CompilerMessageSeverity.LOGGING,
+                        "Scripting plugin will not be loaded: not all required jars are present in the classpath (missing files: $missingJars)"
+                    )
+                }
+            }
+            pluginOptions.addPlatformOptions(arguments)
+        } else {
+            pluginOptions.add("plugin:kotlin.scripting:disable=true")
+        }
+        return PluginCliParser.loadPluginsSafe(pluginClasspaths, pluginOptions, configuration)
+    }
+
+    private fun tryLoadScriptingPluginFromCurrentClassLoader(configuration: CompilerConfiguration): Boolean = try {
+        val pluginRegistrarClass = PluginCliParser::class.java.classLoader.loadClass(
+            "org.jetbrains.kotlin.scripting.compiler.plugin.ScriptingCompilerConfigurationComponentRegistrar"
+        )
+        val pluginRegistrar = pluginRegistrarClass.newInstance() as? ComponentRegistrar
+        if (pluginRegistrar != null) {
+            configuration.add(ComponentRegistrar.PLUGIN_COMPONENT_REGISTRARS, pluginRegistrar)
+            true
+        } else false
+    } catch (_: Throwable) {
+        // TODO: add finer error processing and logging
+        false
+    }
 }
 

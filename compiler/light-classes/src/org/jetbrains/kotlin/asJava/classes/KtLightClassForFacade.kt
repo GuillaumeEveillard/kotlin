@@ -16,12 +16,13 @@
 
 package org.jetbrains.kotlin.asJava.classes
 
-import com.google.common.annotations.VisibleForTesting
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Comparing
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.util.registry.Registry
 import com.intellij.psi.*
+import com.intellij.psi.impl.PsiSuperMethodImplUtil
+import com.intellij.psi.impl.java.stubs.PsiJavaFileStub
 import com.intellij.psi.impl.light.LightEmptyImplementsList
 import com.intellij.psi.impl.light.LightModifierList
 import com.intellij.psi.search.GlobalSearchScope
@@ -53,21 +54,13 @@ open class KtLightClassForFacade constructor(
     files: Collection<KtFile>
 ) : KtLazyLightClass(manager) {
 
-    @Volatile
-    @VisibleForTesting
-    var isClsDelegateLoaded = false
-
-    override val clsDelegate: PsiClass
-        get() {
-            isClsDelegateLoaded = true
-            return super.clsDelegate
-        }
-
     protected open val lightClassDataCache: CachedValue<LightClassDataHolder.ForFacade> = myLightClassDataCache
-        get() {
-            isClsDelegateLoaded = true
-            return field
-        }
+
+    protected open val javaFileStub: PsiJavaFileStub?
+        get() = lightClassDataCache.value.javaFileStub
+
+    override val lightClassData
+        get() = lightClassDataCache.value.findDataForFacade(facadeClassFqName)
 
     val files: Collection<KtFile> = files.toSet()
 
@@ -86,11 +79,13 @@ open class KtLightClassForFacade constructor(
         LightEmptyImplementsList(manager)
 
     private val packageClsFile = FakeFileForLightClass(
-        files.first(),
+        firstFileInFacade,
         lightClass = { this },
-        stub = { lightClassDataCache.value.javaFileStub },
+        stub = { javaFileStub },
         packageFqName = packageFqName
     )
+
+    override fun getParent(): PsiElement = containingFile
 
     override val kotlinOrigin: KtClassOrObject? get() = null
 
@@ -193,9 +188,6 @@ open class KtLightClassForFacade constructor(
 
     override fun copy() = KtLightClassForFacade(manager, facadeClassFqName, lightClassDataCache, files)
 
-    override val lightClassData
-        get() = lightClassDataCache.value.findDataForFacade(facadeClassFqName)
-
     override fun getNavigationElement() = firstFileInFacade
 
     override fun isEquivalentTo(another: PsiElement?): Boolean {
@@ -258,7 +250,9 @@ open class KtLightClassForFacade constructor(
 
     override fun getStartOffsetInParent() = firstFileInFacade.startOffsetInParent
 
-    override fun isWritable() = firstFileInFacade.isWritable
+    override fun isWritable() = files.all { it.isWritable }
+
+    override fun getVisibleSignatures(): MutableCollection<HierarchicalMethodSignature> = PsiSuperMethodImplUtil.getVisibleSignatures(this)
 
     companion object {
 
@@ -269,21 +263,17 @@ open class KtLightClassForFacade constructor(
 
             if (sources.isEmpty()) return null
 
-            val ultraLightEnabled =
-                !KtUltraLightSupport.forceUsingOldLightClasses && Registry.`is`("kotlin.use.ultra.light.classes", true)
-
             val stubProvider = LightClassDataProviderForFileFacade.ByProjectSource(project, fqName, searchScope)
             val stubValue = CachedValuesManager.getManager(project)
                 .createCachedValue(stubProvider, false)
 
             val manager = PsiManager.getInstance(project)
 
-            val ultraLightClass = if (ultraLightEnabled)
-                LightClassGenerationSupport.getInstance(project)
-                    .createUltraLightClassForFacade(manager, fqName, stubValue, sources)
-            else null
-
-            return ultraLightClass ?: KtLightClassForFacade(manager, fqName, stubValue, sources)
+            return LightClassGenerationSupport.getInstance(project).run {
+                if (useUltraLightClasses) createUltraLightClassForFacade(manager, fqName, stubValue, sources)
+                    ?: error { "Unable to create UL class for facade" }
+                else KtLightClassForFacade(manager, fqName, stubValue, sources)
+            }
         }
 
         fun createForFacade(

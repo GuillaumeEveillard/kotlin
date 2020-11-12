@@ -1,7 +1,9 @@
 /*
- * Copyright 2010-2018 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
+
+@file:Suppress("NOTHING_TO_INLINE")
 
 package kotlin
 
@@ -152,30 +154,6 @@ public class Long internal constructor(
     public inline operator fun div(other: Double): Double = toDouble() / other
 
     /** Calculates the remainder of dividing this value by the other value. */
-    @Deprecated("Use rem(other) instead", ReplaceWith("rem(other)"), DeprecationLevel.WARNING)
-    public inline operator fun mod(other: Byte): Long = rem(other)
-
-    /** Calculates the remainder of dividing this value by the other value. */
-    @Deprecated("Use rem(other) instead", ReplaceWith("rem(other)"), DeprecationLevel.WARNING)
-    public inline operator fun mod(other: Short): Long = rem(other)
-
-    /** Calculates the remainder of dividing this value by the other value. */
-    @Deprecated("Use rem(other) instead", ReplaceWith("rem(other)"), DeprecationLevel.WARNING)
-    public inline operator fun mod(other: Int): Long = rem(other)
-
-    /** Calculates the remainder of dividing this value by the other value. */
-    @Deprecated("Use rem(other) instead", ReplaceWith("rem(other)"), DeprecationLevel.WARNING)
-    public inline operator fun mod(other: Long): Long = rem(other)
-
-    /** Calculates the remainder of dividing this value by the other value. */
-    @Deprecated("Use rem(other) instead", ReplaceWith("rem(other)"), DeprecationLevel.WARNING)
-    public inline operator fun mod(other: Float): Float = rem(other)
-
-    /** Calculates the remainder of dividing this value by the other value. */
-    @Deprecated("Use rem(other) instead", ReplaceWith("rem(other)"), DeprecationLevel.WARNING)
-    public inline operator fun mod(other: Double): Double = rem(other)
-
-    /** Calculates the remainder of dividing this value by the other value. */
     @SinceKotlin("1.1")
     public inline operator fun rem(other: Byte): Long = rem(other.toLong())
 
@@ -223,13 +201,28 @@ public class Long internal constructor(
     /** Creates a range from this value to the specified [other] value. */
     public operator fun rangeTo(other: Long): LongRange = LongRange(this, other)
 
-    /** Shifts this value left by the [bitCount] number of bits. */
+    /**
+     * Shifts this value left by the [bitCount] number of bits.
+     *
+     * Note that only the six lowest-order bits of the [bitCount] are used as the shift distance.
+     * The shift distance actually used is therefore always in the range `0..63`.
+     */
     public infix fun shl(bitCount: Int): Long = shiftLeft(bitCount)
 
-    /** Shifts this value right by the [bitCount] number of bits, filling the leftmost bits with copies of the sign bit. */
+    /**
+     * Shifts this value right by the [bitCount] number of bits, filling the leftmost bits with copies of the sign bit.
+     *
+     * Note that only the six lowest-order bits of the [bitCount] are used as the shift distance.
+     * The shift distance actually used is therefore always in the range `0..63`.
+     */
     public infix fun shr(bitCount: Int): Long = shiftRight(bitCount)
 
-    /** Shifts this value right by the [bitCount] number of bits, filling the leftmost bits with zeros. */
+    /**
+     * Shifts this value right by the [bitCount] number of bits, filling the leftmost bits with zeros.
+     *
+     * Note that only the six lowest-order bits of the [bitCount] are used as the shift distance.
+     * The shift distance actually used is therefore always in the range `0..63`.
+     */
     public infix fun ushr(bitCount: Int): Long = shiftRightUnsigned(bitCount)
 
     /** Performs a bitwise AND operation between the two values. */

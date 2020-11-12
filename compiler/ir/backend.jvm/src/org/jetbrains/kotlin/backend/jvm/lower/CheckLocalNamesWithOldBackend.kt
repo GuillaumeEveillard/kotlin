@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.backend.jvm.JvmBackendContext
 import org.jetbrains.kotlin.codegen.binding.CodegenBinding
 import org.jetbrains.kotlin.config.JvmAnalysisFlags
 import org.jetbrains.kotlin.ir.IrElement
+import org.jetbrains.kotlin.ir.ObsoleteDescriptorBasedAPI
 import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrFile
 import org.jetbrains.kotlin.ir.util.render
@@ -34,8 +35,9 @@ class CheckLocalNamesWithOldBackend(private val context: JvmBackendContext) : Fi
         irFile.acceptVoid(this)
     }
 
+    @OptIn(ObsoleteDescriptorBasedAPI::class)
     override fun visitClass(declaration: IrClass) {
-        val actualName = context.getLocalClassInfo(declaration)?.internalName
+        val actualName = context.getLocalClassType(declaration)?.internalName
         if (actualName != null) {
             val expectedName = context.state.bindingTrace.get(CodegenBinding.ASM_TYPE, declaration.symbol.descriptor)?.internalName
             if (expectedName != null && expectedName != actualName) {

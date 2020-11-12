@@ -23,9 +23,10 @@ class ExceptionHelperCallsTransformer(private val context: JsIrBackendContext) :
         context.irBuiltIns.checkNotNullSymbol to referenceFunction(kotlinPackageFqn.child(Name.identifier("ensureNotNull"))),
         context.irBuiltIns.throwCceSymbol to referenceFunction(kotlinPackageFqn.child(Name.identifier("THROW_CCE"))),
         context.irBuiltIns.throwIseSymbol to referenceFunction(kotlinPackageFqn.child(Name.identifier("THROW_ISE"))),
+        context.irBuiltIns.illegalArgumentExceptionSymbol to referenceFunction(kotlinPackageFqn.child(Name.identifier("THROW_IAE"))),
         context.irBuiltIns.noWhenBranchMatchedExceptionSymbol to referenceFunction(kotlinPackageFqn.child(Name.identifier("noWhenBranchMatchedException")))
     )
 
-    override fun transformFunctionAccess(call: IrFunctionAccessExpression) =
+    override fun transformFunctionAccess(call: IrFunctionAccessExpression, doNotIntrinsify: Boolean) =
         helperMapping[call.symbol]?.let { irCall(call, it) } ?: call
 }

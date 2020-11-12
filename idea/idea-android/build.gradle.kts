@@ -22,6 +22,7 @@ dependencies {
     compileOnly(project(":kotlin-android-extensions-runtime"))
     compileOnly(intellijDep())
     compileOnly(intellijPluginDep("android"))
+    compileOnly(intellijPluginDep("gradle"))
 
     testCompile(project(":kotlin-test:kotlin-test-jvm"))
     testCompile(projectTests(":idea:idea-test-framework")) { isTransitive = false }
@@ -34,8 +35,7 @@ dependencies {
 
     testCompile(project(":idea:idea-native")) { isTransitive = false }
     testCompile(project(":idea:idea-gradle-native")) { isTransitive = false }
-    testRuntime(project(":kotlin-native:kotlin-native-library-reader")) { isTransitive = false }
-    testRuntime(project(":kotlin-native:kotlin-native-utils")) { isTransitive = false }
+    testRuntime(project(":native:frontend.native"))
 
     testCompile(intellijDep())
     testCompile(intellijPluginDep("properties"))
@@ -49,6 +49,7 @@ dependencies {
     testRuntime(project(":allopen-ide-plugin"))
     testRuntime(project(":kotlin-scripting-idea"))
     testRuntime(project(":kotlinx-serialization-ide-plugin"))
+    testRuntime(project(":plugins:parcelize:parcelize-ide"))
 
     testRuntime(intellijPluginDep("android"))
 
@@ -65,24 +66,26 @@ dependencies {
 
     Ide.IJ {
         testRuntime(intellijPluginDep("maven"))
+
+        if (Ide.IJ201.orHigher()) {
+            testRuntime(intellijPluginDep("repository-search"))
+        }
     }
 
     testRuntime(intellijPluginDep("testng"))
 
     if (Ide.AS36.orHigher()) {
         testRuntime(intellijPluginDep("android-layoutlib"))
-        testRuntime(intellijPluginDep("android-wizardTemplate-plugin"))
+    }
+
+    if (Ide.AS41.orHigher()) {
+        testRuntime(intellijPluginDep("platform-images"))
     }
 }
 
 sourceSets {
-    if (Ide.IJ183()) {
-        "main" { projectDefault() }
-        "test" { projectDefault() }
-    } else {
-        "main" { }
-        "test" { }
-    }
+    "main" { }
+    "test" { }
 }
 
 projectTest(parallel = true) {

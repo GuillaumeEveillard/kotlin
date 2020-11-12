@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
@@ -26,17 +26,17 @@ public class CheckLocalVariablesTableTestGenerated extends AbstractCheckLocalVar
     }
 
     public void testAllFilesPresentInCheckLocalVariablesTable() throws Exception {
-        KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/checkLocalVariablesTable"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
-    }
-
-    @TestMetadata("catchClause.kt")
-    public void testCatchClause() throws Exception {
-        runTest("compiler/testData/checkLocalVariablesTable/catchClause.kt");
+        KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/checkLocalVariablesTable"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
     }
 
     @TestMetadata("copyFunction.kt")
     public void testCopyFunction() throws Exception {
         runTest("compiler/testData/checkLocalVariablesTable/copyFunction.kt");
+    }
+
+    @TestMetadata("destructuringInFor.kt")
+    public void testDestructuringInFor() throws Exception {
+        runTest("compiler/testData/checkLocalVariablesTable/destructuringInFor.kt");
     }
 
     @TestMetadata("destructuringInLambdas.kt")
@@ -59,11 +59,6 @@ public class CheckLocalVariablesTableTestGenerated extends AbstractCheckLocalVar
         runTest("compiler/testData/checkLocalVariablesTable/inlineLambdaWithParam.kt");
     }
 
-    @TestMetadata("inlineProperty.kt")
-    public void testInlineProperty() throws Exception {
-        runTest("compiler/testData/checkLocalVariablesTable/inlineProperty.kt");
-    }
-
     @TestMetadata("inlineSimple.kt")
     public void testInlineSimple() throws Exception {
         runTest("compiler/testData/checkLocalVariablesTable/inlineSimple.kt");
@@ -84,11 +79,6 @@ public class CheckLocalVariablesTableTestGenerated extends AbstractCheckLocalVar
         runTest("compiler/testData/checkLocalVariablesTable/itInReturnedLambda.kt");
     }
 
-    @TestMetadata("jvmOverloads.kt")
-    public void testJvmOverloads() throws Exception {
-        runTest("compiler/testData/checkLocalVariablesTable/jvmOverloads.kt");
-    }
-
     @TestMetadata("kt11117.kt")
     public void testKt11117() throws Exception {
         runTest("compiler/testData/checkLocalVariablesTable/kt11117.kt");
@@ -104,9 +94,9 @@ public class CheckLocalVariablesTableTestGenerated extends AbstractCheckLocalVar
         runTest("compiler/testData/checkLocalVariablesTable/localFun.kt");
     }
 
-    @TestMetadata("receiverParameter.kt")
-    public void testReceiverParameter() throws Exception {
-        runTest("compiler/testData/checkLocalVariablesTable/receiverParameter.kt");
+    @TestMetadata("objectInLocalPropertyDelegate.kt")
+    public void testObjectInLocalPropertyDelegate() throws Exception {
+        runTest("compiler/testData/checkLocalVariablesTable/objectInLocalPropertyDelegate.kt");
     }
 
     @TestMetadata("underscoreNames.kt")
@@ -123,7 +113,7 @@ public class CheckLocalVariablesTableTestGenerated extends AbstractCheckLocalVar
         }
 
         public void testAllFilesPresentInCompletionInSuspendFunction() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/checkLocalVariablesTable/completionInSuspendFunction"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/checkLocalVariablesTable/completionInSuspendFunction"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("nonStaticSimple.kt")
@@ -166,7 +156,7 @@ public class CheckLocalVariablesTableTestGenerated extends AbstractCheckLocalVar
         }
 
         public void testAllFilesPresentInParametersInSuspendLambda() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/checkLocalVariablesTable/parametersInSuspendLambda"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/checkLocalVariablesTable/parametersInSuspendLambda"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("dataClass.kt")

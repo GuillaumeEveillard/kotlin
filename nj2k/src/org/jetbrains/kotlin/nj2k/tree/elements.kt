@@ -27,8 +27,9 @@ class JKFile(
     var declarationList by children(declarationList)
 }
 
-class JKTypeElement(var type: JKType) : JKTreeElement() {
+class JKTypeElement(var type: JKType, annotationList: JKAnnotationList = JKAnnotationList()) : JKTreeElement(), JKAnnotationListOwner {
     override fun accept(visitor: JKVisitor) = visitor.visitTypeElement(this)
+    override var annotationList: JKAnnotationList by child(annotationList)
 }
 
 abstract class JKBlock : JKTreeElement() {
@@ -250,4 +251,13 @@ class JKKtTryCatchSection(
     var parameter: JKParameter by child(parameter)
     var block: JKBlock by child(block)
     override fun accept(visitor: JKVisitor) = visitor.visitKtTryCatchSection(this)
+}
+
+sealed class JKJavaResourceElement : JKTreeElement(), PsiOwner by PsiOwnerImpl()
+
+class JKJavaResourceExpression(expression: JKExpression) : JKJavaResourceElement() {
+    var expression by child(expression)
+}
+class JKJavaResourceDeclaration(declaration: JKLocalVariable) : JKJavaResourceElement() {
+    var declaration by child(declaration)
 }

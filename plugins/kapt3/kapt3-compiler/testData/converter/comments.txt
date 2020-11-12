@@ -34,6 +34,7 @@ import java.lang.System;
  */
 @kotlin.Metadata()
 public final class Obj {
+    @org.jetbrains.annotations.NotNull()
     public static final Obj INSTANCE = null;
 
     private Obj() {
@@ -87,7 +88,8 @@ public final class Test {
      * prop2.
      */
     @Anno()
-    public static void prop2$annotations() {
+    @java.lang.Deprecated()
+    public static void getProp2$annotations() {
     }
 
     @org.jetbrains.annotations.NotNull()

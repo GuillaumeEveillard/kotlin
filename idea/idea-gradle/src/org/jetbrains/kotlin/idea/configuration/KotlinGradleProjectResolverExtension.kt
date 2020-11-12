@@ -34,6 +34,7 @@ import org.jetbrains.kotlin.idea.util.NotNullableCopyableDataNodeUserDataPropert
 import org.jetbrains.kotlin.idea.util.PsiPrecedences
 import org.jetbrains.kotlin.idea.statistics.FUSEventGroups
 import org.jetbrains.kotlin.idea.statistics.KotlinFUSLogger
+import org.jetbrains.kotlin.idea.statistics.KotlinGradleFUSLogger
 import org.jetbrains.plugins.gradle.model.ExternalProjectDependency
 import org.jetbrains.plugins.gradle.model.ExternalSourceSet
 import org.jetbrains.plugins.gradle.model.FileCollectionDependency
@@ -144,6 +145,8 @@ class KotlinGradleProjectResolverExtension : AbstractProjectResolverExtension() 
             ExternalSystemApiUtil.findAll(ideModule, GradleSourceSetData.KEY)
         } else listOf(ideModule)
 
+        val ideaModulesByGradlePaths = gradleModule.project.modules.groupBy { it.gradleProject.path }
+        var dirtyDependencies = true
         for (currentModuleNode in moduleNodesToProcess) {
             val toProcess = ArrayDeque<DataNode<out ModuleData>>().apply { add(currentModuleNode) }
             val discovered = HashSet<DataNode<out ModuleData>>().apply { add(currentModuleNode) }
@@ -156,7 +159,7 @@ class KotlinGradleProjectResolverExtension : AbstractProjectResolverExtension() 
                 } else moduleNode
 
                 val ideaModule = if (moduleNodeForGradleModel != ideModule) {
-                    gradleModule.project.modules.firstOrNull { it.gradleProject.path == moduleNodeForGradleModel?.data?.id }
+                    moduleNodeForGradleModel?.data?.id?.let { ideaModulesByGradlePaths[it]?.firstOrNull() }
                 } else gradleModule
 
                 val implementsModuleIds = resolverCtx.getExtraProject(ideaModule, KotlinGradleModel::class.java)?.implements
@@ -178,14 +181,18 @@ class KotlinGradleProjectResolverExtension : AbstractProjectResolverExtension() 
                             addDependency(currentModuleNode, targetMainSourceSet)
                         }
                     } else {
+                        dirtyDependencies = true
                         addDependency(currentModuleNode, targetModule)
                     }
                 }
 
-                val dependencies = if (useModulePerSourceSet()) moduleNode.getDependencies(ideProject) else getDependencyModules(
-                    ideModule,
-                    gradleModule.project
-                )
+                val dependencies = if (useModulePerSourceSet()) {
+                    moduleNode.getDependencies(ideProject)
+                } else {
+                    if (dirtyDependencies) getDependencyModules(ideModule, gradleModule.project).also {
+                        dirtyDependencies = false
+                    } else emptyList()
+                }
                 // queue only those dependencies that haven't been discovered earlier
                 dependencies.filterTo(toProcess, discovered::add)
             }
@@ -289,8 +296,15 @@ class KotlinGradleProjectResolverExtension : AbstractProjectResolverExtension() 
         nextResolver.populateModuleContentRoots(gradleModule, ideModule)
         val moduleNamePrefix = GradleProjectResolverUtil.getModuleId(resolverCtx, gradleModule)
         resolverCtx.getExtraProject(gradleModule, KotlinGradleModel::class.java)?.let { gradleModel ->
-            ideModule.pureKotlinSourceFolders =
+            KotlinGradleFUSLogger.populateGradleUserDir(gradleModel.gradleUserHome)
+            val gradleModelPureKotlinSourceFolders =
                 gradleModel.kotlinTaskProperties.flatMap { it.value.pureKotlinSourceFolders ?: emptyList() }.map { it.absolutePath }
+            ideModule.pureKotlinSourceFolders =
+                if (ideModule.pureKotlinSourceFolders.isEmpty())
+                    gradleModelPureKotlinSourceFolders
+                else
+                    gradleModelPureKotlinSourceFolders + ideModule.pureKotlinSourceFolders
+
             val gradleSourceSets = ideModule.children.filter { it.data is GradleSourceSetData } as Collection<DataNode<GradleSourceSetData>>
             for (gradleSourceSetNode in gradleSourceSets) {
                 val propertiesForSourceSet =

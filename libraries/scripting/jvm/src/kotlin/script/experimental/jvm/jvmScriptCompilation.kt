@@ -25,6 +25,8 @@ class JvmDependencyFromClassLoader(val classLoaderGetter: ClassLoaderByConfigura
     fun getClassLoader(configuration: ScriptCompilationConfiguration): ClassLoader = classLoaderGetter(configuration)
 }
 
+data class JsDependency(val path: String) : ScriptDependency
+
 interface JvmScriptCompilationConfigurationKeys
 
 open class JvmScriptCompilationConfigurationBuilder : PropertiesCollection.Builder(), JvmScriptCompilationConfigurationKeys {
@@ -93,7 +95,11 @@ private fun Collection<File>.filterNewClasspath(known: Collection<ScriptDependen
 @Suppress("DEPRECATION")
 val JvmScriptCompilationConfigurationKeys.javaHome by PropertiesCollection.keyCopy(ScriptingHostConfiguration.jvm.javaHome)
 
-val JvmScriptCompilationConfigurationKeys.jdkHome by PropertiesCollection.keyCopy(ScriptingHostConfiguration.jvm.jdkHome)
+val JvmScriptCompilationConfigurationKeys.jdkHome
+        by PropertiesCollection.keyCopy(
+            ScriptingHostConfiguration.jvm.jdkHome,
+            getSourceProperties = { get(ScriptCompilationConfiguration.hostConfiguration) }
+        )
 
 @Suppress("unused")
 val ScriptCompilationConfigurationKeys.jvm

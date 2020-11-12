@@ -17,6 +17,7 @@
 package org.jetbrains.kotlin.resolve.lazy;
 
 import com.google.common.collect.Lists;
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.util.containers.ContainerUtil;
 import kotlin.annotations.jvm.ReadOnly;
@@ -41,6 +42,7 @@ import org.jetbrains.kotlin.resolve.lazy.declarations.PackageMemberDeclarationPr
 import org.jetbrains.kotlin.resolve.lazy.descriptors.LazyAnnotations;
 import org.jetbrains.kotlin.resolve.lazy.descriptors.LazyAnnotationsContextImpl;
 import org.jetbrains.kotlin.resolve.lazy.descriptors.LazyPackageDescriptor;
+import org.jetbrains.kotlin.resolve.sam.SamConversionResolver;
 import org.jetbrains.kotlin.resolve.scopes.LexicalScope;
 import org.jetbrains.kotlin.resolve.scopes.MemberScope;
 import org.jetbrains.kotlin.storage.*;
@@ -82,6 +84,7 @@ public class ResolveSession implements KotlinCodeAnalyzer, LazyClassContext {
     private DelegationFilter delegationFilter;
     private WrappedTypeFactory wrappedTypeFactory;
     private PlatformDiagnosticSuppressor platformDiagnosticSuppressor;
+    private SamConversionResolver samConversionResolver;
 
     private final SyntheticResolveExtension syntheticResolveExtension;
 
@@ -149,6 +152,11 @@ public class ResolveSession implements KotlinCodeAnalyzer, LazyClassContext {
         this.platformDiagnosticSuppressor = platformDiagnosticSuppressor;
     }
 
+    @Inject
+    public void setSamConversionResolver(@NotNull SamConversionResolver samConversionResolver) {
+        this.samConversionResolver = samConversionResolver;
+    }
+
     // Only calls from injectors expected
     @Deprecated
     public ResolveSession(
@@ -171,7 +179,17 @@ public class ResolveSession implements KotlinCodeAnalyzer, LazyClassContext {
 
         this.declarationProviderFactory = declarationProviderFactory;
 
-        this.packageFragmentProvider = new PackageFragmentProvider() {
+        this.packageFragmentProvider = new PackageFragmentProviderOptimized() {
+            @Override
+            public void collectPackageFragments(
+                    @NotNull FqName fqName, @NotNull Collection<PackageFragmentDescriptor> packageFragments
+            ) {
+                LazyPackageDescriptor fragment = getPackageFragment(fqName);
+                if (fragment != null) {
+                    packageFragments.add(fragment);
+                }
+            }
+
             @NotNull
             @Override
             public List<PackageFragmentDescriptor> getPackageFragments(@NotNull FqName fqName) {
@@ -325,7 +343,8 @@ public class ResolveSession implements KotlinCodeAnalyzer, LazyClassContext {
                     + "\n. Change the caller accordingly"
             );
         }
-        if (!KtPsiUtil.isLocal(declaration)) {
+        final boolean isLocal = ReadAction.compute(() -> KtPsiUtil.isLocal(declaration));
+        if (!isLocal){
             return lazyDeclarationResolver.resolveToDescriptor(declaration);
         }
         return localDescriptorResolver.resolveLocalDeclaration(declaration);
@@ -474,5 +493,11 @@ public class ResolveSession implements KotlinCodeAnalyzer, LazyClassContext {
     @Override
     public NewKotlinTypeChecker getKotlinTypeChecker() {
         return kotlinTypeChecker;
+    }
+
+    @NotNull
+    @Override
+    public SamConversionResolver getSamConversionResolver() {
+        return samConversionResolver;
     }
 }

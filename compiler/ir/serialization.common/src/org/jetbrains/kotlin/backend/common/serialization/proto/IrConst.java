@@ -37,7 +37,7 @@ public final class IrConst extends
         org.jetbrains.kotlin.protobuf.ByteString.newOutput();
     org.jetbrains.kotlin.protobuf.CodedOutputStream unknownFieldsCodedOutput =
         org.jetbrains.kotlin.protobuf.CodedOutputStream.newInstance(
-            unknownFieldsOutput);
+            unknownFieldsOutput, 1);
     try {
       boolean done = false;
       while (!done) {
@@ -90,25 +90,17 @@ public final class IrConst extends
           }
           case 69: {
             valueCase_ = 8;
-            value_ = input.readFloat();
+            value_ = input.readFixed32();
             break;
           }
           case 73: {
             valueCase_ = 9;
-            value_ = input.readDouble();
+            value_ = input.readFixed64();
             break;
           }
-          case 82: {
-            org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.Builder subBuilder = null;
-            if (valueCase_ == 10) {
-              subBuilder = ((org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex) value_).toBuilder();
-            }
-            value_ = input.readMessage(org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.PARSER, extensionRegistry);
-            if (subBuilder != null) {
-              subBuilder.mergeFrom((org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex) value_);
-              value_ = subBuilder.buildPartial();
-            }
+          case 80: {
             valueCase_ = 10;
+            value_ = input.readInt32();
             break;
           }
         }
@@ -156,8 +148,8 @@ public final class IrConst extends
     SHORT(5),
     INT(6),
     LONG(7),
-    FLOAT(8),
-    DOUBLE(9),
+    FLOAT_BITS(8),
+    DOUBLE_BITS(9),
     STRING(10),
     VALUE_NOT_SET(0);
     private int value = 0;
@@ -173,8 +165,8 @@ public final class IrConst extends
         case 5: return SHORT;
         case 6: return INT;
         case 7: return LONG;
-        case 8: return FLOAT;
-        case 9: return DOUBLE;
+        case 8: return FLOAT_BITS;
+        case 9: return DOUBLE_BITS;
         case 10: return STRING;
         case 0: return VALUE_NOT_SET;
         default: throw new java.lang.IllegalArgumentException(
@@ -311,55 +303,63 @@ public final class IrConst extends
     return 0L;
   }
 
-  public static final int FLOAT_FIELD_NUMBER = 8;
+  public static final int FLOAT_BITS_FIELD_NUMBER = 8;
   /**
-   * <code>optional float float = 8;</code>
+   * <code>optional fixed32 float_bits = 8;</code>
+   *
+   * <pre>
+   * float/double is stored via fixed 32/64 bit value to avoid raw bit conversion
+   * </pre>
    */
-  public boolean hasFloat() {
+  public boolean hasFloatBits() {
     return valueCase_ == 8;
   }
   /**
-   * <code>optional float float = 8;</code>
+   * <code>optional fixed32 float_bits = 8;</code>
+   *
+   * <pre>
+   * float/double is stored via fixed 32/64 bit value to avoid raw bit conversion
+   * </pre>
    */
-  public float getFloat() {
+  public int getFloatBits() {
     if (valueCase_ == 8) {
-      return (java.lang.Float) value_;
+      return (java.lang.Integer) value_;
     }
-    return 0F;
+    return 0;
   }
 
-  public static final int DOUBLE_FIELD_NUMBER = 9;
+  public static final int DOUBLE_BITS_FIELD_NUMBER = 9;
   /**
-   * <code>optional double double = 9;</code>
+   * <code>optional fixed64 double_bits = 9;</code>
    */
-  public boolean hasDouble() {
+  public boolean hasDoubleBits() {
     return valueCase_ == 9;
   }
   /**
-   * <code>optional double double = 9;</code>
+   * <code>optional fixed64 double_bits = 9;</code>
    */
-  public double getDouble() {
+  public long getDoubleBits() {
     if (valueCase_ == 9) {
-      return (java.lang.Double) value_;
+      return (java.lang.Long) value_;
     }
-    return 0D;
+    return 0L;
   }
 
   public static final int STRING_FIELD_NUMBER = 10;
   /**
-   * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex string = 10;</code>
+   * <code>optional int32 string = 10;</code>
    */
   public boolean hasString() {
     return valueCase_ == 10;
   }
   /**
-   * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex string = 10;</code>
+   * <code>optional int32 string = 10;</code>
    */
-  public org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex getString() {
+  public int getString() {
     if (valueCase_ == 10) {
-       return (org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex) value_;
+      return (java.lang.Integer) value_;
     }
-    return org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.getDefaultInstance();
+    return 0;
   }
 
   private void initFields() {
@@ -370,12 +370,6 @@ public final class IrConst extends
     if (isInitialized == 1) return true;
     if (isInitialized == 0) return false;
 
-    if (hasString()) {
-      if (!getString().isInitialized()) {
-        memoizedIsInitialized = 0;
-        return false;
-      }
-    }
     memoizedIsInitialized = 1;
     return true;
   }
@@ -412,15 +406,16 @@ public final class IrConst extends
           7, (long)((java.lang.Long) value_));
     }
     if (valueCase_ == 8) {
-      output.writeFloat(
-          8, (float)((java.lang.Float) value_));
+      output.writeFixed32(
+          8, (int)((java.lang.Integer) value_));
     }
     if (valueCase_ == 9) {
-      output.writeDouble(
-          9, (double)((java.lang.Double) value_));
+      output.writeFixed64(
+          9, (long)((java.lang.Long) value_));
     }
     if (valueCase_ == 10) {
-      output.writeMessage(10, (org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex) value_);
+      output.writeInt32(
+          10, (int)((java.lang.Integer) value_));
     }
     output.writeRawBytes(unknownFields);
   }
@@ -468,17 +463,18 @@ public final class IrConst extends
     }
     if (valueCase_ == 8) {
       size += org.jetbrains.kotlin.protobuf.CodedOutputStream
-        .computeFloatSize(
-            8, (float)((java.lang.Float) value_));
+        .computeFixed32Size(
+            8, (int)((java.lang.Integer) value_));
     }
     if (valueCase_ == 9) {
       size += org.jetbrains.kotlin.protobuf.CodedOutputStream
-        .computeDoubleSize(
-            9, (double)((java.lang.Double) value_));
+        .computeFixed64Size(
+            9, (long)((java.lang.Long) value_));
     }
     if (valueCase_ == 10) {
       size += org.jetbrains.kotlin.protobuf.CodedOutputStream
-        .computeMessageSize(10, (org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex) value_);
+        .computeInt32Size(
+            10, (int)((java.lang.Integer) value_));
     }
     size += unknownFields.size();
     memoizedSerializedSize = size;
@@ -665,16 +661,16 @@ public final class IrConst extends
           setLong(other.getLong());
           break;
         }
-        case FLOAT: {
-          setFloat(other.getFloat());
+        case FLOAT_BITS: {
+          setFloatBits(other.getFloatBits());
           break;
         }
-        case DOUBLE: {
-          setDouble(other.getDouble());
+        case DOUBLE_BITS: {
+          setDoubleBits(other.getDoubleBits());
           break;
         }
         case STRING: {
-          mergeString(other.getString());
+          setString(other.getString());
           break;
         }
         case VALUE_NOT_SET: {
@@ -687,12 +683,6 @@ public final class IrConst extends
     }
 
     public final boolean isInitialized() {
-      if (hasString()) {
-        if (!getString().isInitialized()) {
-          
-          return false;
-        }
-      }
       return true;
     }
 
@@ -982,33 +972,49 @@ public final class IrConst extends
     }
 
     /**
-     * <code>optional float float = 8;</code>
+     * <code>optional fixed32 float_bits = 8;</code>
+     *
+     * <pre>
+     * float/double is stored via fixed 32/64 bit value to avoid raw bit conversion
+     * </pre>
      */
-    public boolean hasFloat() {
+    public boolean hasFloatBits() {
       return valueCase_ == 8;
     }
     /**
-     * <code>optional float float = 8;</code>
+     * <code>optional fixed32 float_bits = 8;</code>
+     *
+     * <pre>
+     * float/double is stored via fixed 32/64 bit value to avoid raw bit conversion
+     * </pre>
      */
-    public float getFloat() {
+    public int getFloatBits() {
       if (valueCase_ == 8) {
-        return (java.lang.Float) value_;
+        return (java.lang.Integer) value_;
       }
-      return 0F;
+      return 0;
     }
     /**
-     * <code>optional float float = 8;</code>
+     * <code>optional fixed32 float_bits = 8;</code>
+     *
+     * <pre>
+     * float/double is stored via fixed 32/64 bit value to avoid raw bit conversion
+     * </pre>
      */
-    public Builder setFloat(float value) {
+    public Builder setFloatBits(int value) {
       valueCase_ = 8;
       value_ = value;
       
       return this;
     }
     /**
-     * <code>optional float float = 8;</code>
+     * <code>optional fixed32 float_bits = 8;</code>
+     *
+     * <pre>
+     * float/double is stored via fixed 32/64 bit value to avoid raw bit conversion
+     * </pre>
      */
-    public Builder clearFloat() {
+    public Builder clearFloatBits() {
       if (valueCase_ == 8) {
         valueCase_ = 0;
         value_ = null;
@@ -1018,33 +1024,33 @@ public final class IrConst extends
     }
 
     /**
-     * <code>optional double double = 9;</code>
+     * <code>optional fixed64 double_bits = 9;</code>
      */
-    public boolean hasDouble() {
+    public boolean hasDoubleBits() {
       return valueCase_ == 9;
     }
     /**
-     * <code>optional double double = 9;</code>
+     * <code>optional fixed64 double_bits = 9;</code>
      */
-    public double getDouble() {
+    public long getDoubleBits() {
       if (valueCase_ == 9) {
-        return (java.lang.Double) value_;
+        return (java.lang.Long) value_;
       }
-      return 0D;
+      return 0L;
     }
     /**
-     * <code>optional double double = 9;</code>
+     * <code>optional fixed64 double_bits = 9;</code>
      */
-    public Builder setDouble(double value) {
+    public Builder setDoubleBits(long value) {
       valueCase_ = 9;
       value_ = value;
       
       return this;
     }
     /**
-     * <code>optional double double = 9;</code>
+     * <code>optional fixed64 double_bits = 9;</code>
      */
-    public Builder clearDouble() {
+    public Builder clearDoubleBits() {
       if (valueCase_ == 9) {
         valueCase_ = 0;
         value_ = null;
@@ -1054,59 +1060,31 @@ public final class IrConst extends
     }
 
     /**
-     * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex string = 10;</code>
+     * <code>optional int32 string = 10;</code>
      */
     public boolean hasString() {
       return valueCase_ == 10;
     }
     /**
-     * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex string = 10;</code>
+     * <code>optional int32 string = 10;</code>
      */
-    public org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex getString() {
+    public int getString() {
       if (valueCase_ == 10) {
-        return (org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex) value_;
+        return (java.lang.Integer) value_;
       }
-      return org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.getDefaultInstance();
+      return 0;
     }
     /**
-     * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex string = 10;</code>
+     * <code>optional int32 string = 10;</code>
      */
-    public Builder setString(org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex value) {
-      if (value == null) {
-        throw new NullPointerException();
-      }
+    public Builder setString(int value) {
+      valueCase_ = 10;
       value_ = value;
-
-      valueCase_ = 10;
+      
       return this;
     }
     /**
-     * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex string = 10;</code>
-     */
-    public Builder setString(
-        org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.Builder builderForValue) {
-      value_ = builderForValue.build();
-
-      valueCase_ = 10;
-      return this;
-    }
-    /**
-     * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex string = 10;</code>
-     */
-    public Builder mergeString(org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex value) {
-      if (valueCase_ == 10 &&
-          value_ != org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.getDefaultInstance()) {
-        value_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.newBuilder((org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex) value_)
-            .mergeFrom(value).buildPartial();
-      } else {
-        value_ = value;
-      }
-
-      valueCase_ = 10;
-      return this;
-    }
-    /**
-     * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex string = 10;</code>
+     * <code>optional int32 string = 10;</code>
      */
     public Builder clearString() {
       if (valueCase_ == 10) {

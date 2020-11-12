@@ -1,17 +1,6 @@
 /*
- * Copyright 2010-2016 JetBrains s.r.o.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
 package org.jetbrains.kotlin.idea.debugger
@@ -20,18 +9,19 @@ import com.intellij.debugger.engine.DebugProcess
 import com.intellij.openapi.application.ex.ApplicationManagerEx
 import com.intellij.openapi.progress.EmptyProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.MessageType
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiReference
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.searches.ReferencesSearch
-import com.intellij.xdebugger.impl.XDebugSessionImpl
+import com.intellij.xdebugger.impl.XDebuggerManagerImpl
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor
 import org.jetbrains.kotlin.descriptors.PropertyDescriptor
 import org.jetbrains.kotlin.idea.debugger.DebuggerClassNameProvider.Companion.getRelevantElement
 import org.jetbrains.kotlin.idea.debugger.evaluate.KotlinDebuggerCaches
 import org.jetbrains.kotlin.idea.debugger.evaluate.KotlinDebuggerCaches.ComputedClassNames
-import org.jetbrains.kotlin.idea.search.usagesSearch.isImportUsage
+import org.jetbrains.kotlin.idea.search.isImportUsage
 import org.jetbrains.kotlin.idea.stubindex.KotlinSourceFilterScope
 import org.jetbrains.kotlin.idea.util.ProjectRootsUtil
 import org.jetbrains.kotlin.idea.util.application.runReadAction
@@ -41,19 +31,18 @@ import org.jetbrains.kotlin.psi.psiUtil.isAncestor
 import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.inline.InlineUtil
 
-class InlineCallableUsagesSearcher(private val myDebugProcess: DebugProcess) {
+class InlineCallableUsagesSearcher(val project: Project, val searchScope: GlobalSearchScope) {
     fun findInlinedCalls(
-            declaration: KtDeclaration,
-            alreadyVisited: Set<PsiElement>,
-            bindingContext: BindingContext = KotlinDebuggerCaches.getOrCreateTypeMapper(declaration).bindingContext,
-            transformer: (PsiElement, Set<PsiElement>) -> ComputedClassNames
+        declaration: KtDeclaration,
+        alreadyVisited: Set<PsiElement>,
+        bindingContext: BindingContext = KotlinDebuggerCaches.getOrCreateTypeMapper(declaration).bindingContext,
+        transformer: (PsiElement, Set<PsiElement>) -> ComputedClassNames
     ): ComputedClassNames {
         if (!checkIfInline(declaration, bindingContext)) {
             return ComputedClassNames.EMPTY
-        }
-        else {
+        } else {
             val searchResult = hashSetOf<PsiElement>()
-            val declarationName = runReadAction { declaration.name }
+            val declarationName = runReadAction { declaration.name ?: "<error>" }
 
             val task = Runnable {
                 for (reference in ReferencesSearch.search(declaration, getScopeForInlineDeclarationUsages(declaration))) {
@@ -65,20 +54,24 @@ class InlineCallableUsagesSearcher(private val myDebugProcess: DebugProcess) {
             val applicationEx = ApplicationManagerEx.getApplicationEx()
             if (applicationEx.isDispatchThread) {
                 isSuccess = ProgressManager.getInstance().runProcessWithProgressSynchronously(
-                        task,
-                        "Compute class names for declaration $declarationName",
-                        true,
-                        myDebugProcess.project)
-            }
-            else {
-                ProgressManager.getInstance().runProcess(task, EmptyProgressIndicator())
+                    task,
+                    KotlinDebuggerCoreBundle.message("find.inline.calls.task.compute.names", declarationName),
+                    true,
+                    project
+                )
+            } else {
+                try {
+                    ProgressManager.getInstance().runProcess(task, EmptyProgressIndicator())
+                } catch (e: InterruptedException) {
+                    isSuccess = false
+                }
             }
 
             if (!isSuccess) {
-                XDebugSessionImpl.NOTIFICATION_GROUP.createNotification(
-                        "Debugger can skip some executions of $declarationName because the computation of class names was interrupted",
-                        MessageType.WARNING
-                ).notify(myDebugProcess.project)
+                XDebuggerManagerImpl.NOTIFICATION_GROUP.createNotification(
+                    KotlinDebuggerCoreBundle.message("find.inline.calls.task.cancelled", declarationName),
+                    MessageType.WARNING
+                ).notify(project)
             }
 
             val newAlreadyVisited = HashSet<PsiElement>().apply {
@@ -113,12 +106,12 @@ class InlineCallableUsagesSearcher(private val myDebugProcess: DebugProcess) {
 
     private fun getScopeForInlineDeclarationUsages(inlineDeclaration: KtDeclaration): GlobalSearchScope {
         val virtualFile = runReadAction { inlineDeclaration.containingFile.virtualFile }
-        return if (virtualFile != null && ProjectRootsUtil.isLibraryFile(myDebugProcess.project, virtualFile)) {
-            myDebugProcess.searchScope.uniteWith(
-                    KotlinSourceFilterScope.librarySources(GlobalSearchScope.allScope(myDebugProcess.project), myDebugProcess.project))
-        }
-        else {
-            myDebugProcess.searchScope
+        return if (virtualFile != null && ProjectRootsUtil.isLibraryFile(project, virtualFile)) {
+            searchScope.uniteWith(
+                KotlinSourceFilterScope.librarySources(GlobalSearchScope.allScope(project), project)
+            )
+        } else {
+            searchScope
         }
     }
 }

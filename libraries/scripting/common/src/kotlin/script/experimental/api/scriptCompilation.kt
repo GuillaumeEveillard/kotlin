@@ -148,7 +148,7 @@ val ScriptCompilationConfigurationKeys.refineConfigurationOnAnnotations by Prope
 val ScriptCompilationConfigurationKeys.refineConfigurationBeforeCompiling by PropertiesCollection.key<List<RefineConfigurationUnconditionallyData>>(isTransient = true)
 
 /**
- * The list of script fragments that should be compiled intead of the whole text
+ * The list of script fragments that should be compiled instead of the whole text
  * (for use primary with the refinement callbacks)
  */
 val ScriptCompilationConfigurationKeys.sourceFragments by PropertiesCollection.key<List<ScriptSourceNamedFragment>>()
@@ -274,13 +274,15 @@ fun ScriptCompilationConfiguration.refineOnAnnotations(
     val foundAnnotationNames = collectedData[ScriptCollectedData.foundAnnotations]?.mapTo(HashSet()) { it.annotationClass.java.name }
     if (foundAnnotationNames.isNullOrEmpty()) return this.asSuccess()
 
-    val refinedConfig = this[ScriptCompilationConfiguration.refineConfigurationOnAnnotations]
-        ?.fold(this) { config, (annotations, handler) ->
-            // checking that the collected data contains expected annotations
-            if (annotations.none { foundAnnotationNames.contains(it.typeName) }) config
-            else handler.invoke(ScriptConfigurationRefinementContext(script, config, collectedData)).valueOr { return it }
-        }
-    return (refinedConfig ?: this).asSuccess()
+    val thisResult: ResultWithDiagnostics<ScriptCompilationConfiguration> = this.asSuccess()
+    return this[ScriptCompilationConfiguration.refineConfigurationOnAnnotations]
+        ?.fold(thisResult) { config, (annotations, handler) ->
+            config.onSuccess {
+                // checking that the collected data contains expected annotations
+                if (annotations.none { foundAnnotationNames.contains(it.typeName) }) it.asSuccess()
+                else handler.invoke(ScriptConfigurationRefinementContext(script, it, collectedData))
+            }
+        } ?: thisResult
 }
 
 fun ScriptCompilationConfiguration.refineBeforeCompiling(
@@ -315,13 +317,13 @@ interface ScriptCompiler {
     suspend operator fun invoke(
         script: SourceCode,
         scriptCompilationConfiguration: ScriptCompilationConfiguration
-    ): ResultWithDiagnostics<CompiledScript<*>>
+    ): ResultWithDiagnostics<CompiledScript>
 }
 
 /**
  * The interface to the compiled script
  */
-interface CompiledScript<out ScriptBase : Any> {
+interface CompiledScript {
 
     /**
      * The location identifier for the script source, taken from SourceCode.locationId
@@ -344,7 +346,7 @@ interface CompiledScript<out ScriptBase : Any> {
     /**
      * The scripts compiled along with this one in one module, imported or otherwise included into compilation
      */
-    val otherScripts: List<CompiledScript<*>>
+    val otherScripts: List<CompiledScript>
         get() = emptyList()
 
     /**

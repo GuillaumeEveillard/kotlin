@@ -1,3 +1,8 @@
+/*
+ * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
+ */
+
 package org.jetbrains.kotlin.idea.externalAnnotations
 
 import com.intellij.openapi.module.Module
@@ -18,6 +23,8 @@ import java.io.File
 
 @RunWith(JUnit3WithIdeaConfigurationRunner::class)
 class ExternalAnnotationTest : KotlinLightCodeInsightFixtureTestCase() {
+
+    override fun getTestDataPath() = KotlinTestUtils.getHomeDirectory()
 
     fun testNotNullMethod() {
         KotlinTestUtils.runTest(::doTest, TargetBackend.ANY, "idea/testData/externalAnnotations/notNullMethod.kt")
@@ -65,7 +72,7 @@ class ExternalAnnotationTest : KotlinLightCodeInsightFixtureTestCase() {
         override fun configureModule(module: Module, model: ModifiableRootModel) {
             super.configureModule(module, model)
             model.getModuleExtension(JavaModuleExternalPaths::class.java)
-                    .setExternalAnnotationUrls(arrayOf(VfsUtilCore.pathToUrl(externalAnnotationsPath)))
+                .setExternalAnnotationUrls(arrayOf(VfsUtilCore.pathToUrl(externalAnnotationsPath)))
         }
     }
 

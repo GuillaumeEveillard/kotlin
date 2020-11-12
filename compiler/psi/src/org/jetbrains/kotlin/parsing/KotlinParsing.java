@@ -51,9 +51,15 @@ public class KotlinParsing extends AbstractKotlinParsing {
     private static final TokenSet TYPE_REF_FIRST = TokenSet.create(LBRACKET, IDENTIFIER, LPAR, HASH, DYNAMIC_KEYWORD);
     private static final TokenSet RECEIVER_TYPE_TERMINATORS = TokenSet.create(DOT, SAFE_ACCESS);
     private static final TokenSet VALUE_PARAMETER_FIRST =
-            TokenSet.orSet(TokenSet.create(IDENTIFIER, LBRACKET, VAL_KEYWORD, VAR_KEYWORD), MODIFIER_KEYWORDS);
+            TokenSet.orSet(
+                    TokenSet.create(IDENTIFIER, LBRACKET, VAL_KEYWORD, VAR_KEYWORD),
+                    TokenSet.andNot(MODIFIER_KEYWORDS, TokenSet.create(FUN_KEYWORD))
+            );
     private static final TokenSet LAMBDA_VALUE_PARAMETER_FIRST =
-            TokenSet.orSet(TokenSet.create(IDENTIFIER, LBRACKET), MODIFIER_KEYWORDS);
+            TokenSet.orSet(
+                    TokenSet.create(IDENTIFIER, LBRACKET),
+                    TokenSet.andNot(MODIFIER_KEYWORDS, TokenSet.create(FUN_KEYWORD))
+            );
     private static final TokenSet SOFT_KEYWORDS_AT_MEMBER_START = TokenSet.create(CONSTRUCTOR_KEYWORD, INIT_KEYWORD);
     private static final TokenSet ANNOTATION_TARGETS = TokenSet.create(
             FILE_KEYWORD, FIELD_KEYWORD, GET_KEYWORD, SET_KEYWORD, PROPERTY_KEYWORD,
@@ -585,6 +591,12 @@ public class KotlinParsing extends AbstractKotlinParsing {
 
         if (atSet(modifierKeywords)) {
             IElementType lookahead = lookahead(1);
+
+            if (at(FUN_KEYWORD) && lookahead != INTERFACE_KEYWORD) {
+                marker.rollbackTo();
+                return false;
+            }
+
             if (lookahead != null && !noModifiersBefore.contains(lookahead)) {
                 IElementType tt = tt();
                 if (tokenConsumer != null) {
@@ -1466,7 +1478,7 @@ public class KotlinParsing extends AbstractKotlinParsing {
                 if (at(COMMA)) {
                     errorAndAdvance("Expecting a name");
                 }
-                else if (at(RPAR)) {
+                else if (at(RPAR)) { // For declaration similar to `val () = somethingCall()`
                     error("Expecting a name");
                     break;
                 }
@@ -1484,6 +1496,7 @@ public class KotlinParsing extends AbstractKotlinParsing {
 
                 if (!at(COMMA)) break;
                 advance(); // COMMA
+                if (at(RPAR)) break;
             }
         }
 
@@ -1549,10 +1562,13 @@ public class KotlinParsing extends AbstractKotlinParsing {
             expect(IDENTIFIER, "Expecting parameter name", TokenSet.create(RPAR, COLON, LBRACE, EQ));
 
             if (at(COLON)) {
-                advance();  // COLON
+                advance(); // COLON
                 parseTypeRef();
             }
             setterParameter.done(VALUE_PARAMETER);
+            if (at(COMMA)) {
+                advance(); // COMMA
+            }
             parameterList.done(VALUE_PARAMETER_LIST);
         }
         if (!at(RPAR)) {
@@ -1568,6 +1584,8 @@ public class KotlinParsing extends AbstractKotlinParsing {
 
             parseTypeRef();
         }
+
+        parseFunctionContract();
 
         parseFunctionBody();
 
@@ -1655,7 +1673,13 @@ public class KotlinParsing extends AbstractKotlinParsing {
             parseTypeRef();
         }
 
+        boolean functionContractOccurred = parseFunctionContract();
+
         parseTypeConstraintsGuarded(typeParameterListOccurred);
+
+        if (!functionContractOccurred) {
+            parseFunctionContract();
+        }
 
         if (at(SEMICOLON)) {
             advance(); // SEMICOLON
@@ -1788,20 +1812,23 @@ public class KotlinParsing extends AbstractKotlinParsing {
 
         myBuilder.enableNewlines();
 
-        expect(LBRACE, "Expecting '{' to open a block");
+        boolean hasOpeningBrace = expect(LBRACE, "Expecting '{' to open a block");
+        boolean canCollapse = collapse && hasOpeningBrace;
 
-        if(collapse){
+        if (canCollapse) {
             advanceBalancedBlock();
-        }else{
+        }
+        else {
             myExpressionParsing.parseStatements();
             expect(RBRACE, "Expecting '}'");
         }
 
         myBuilder.restoreNewlinesState();
 
-        if(collapse){
+        if (canCollapse) {
             lazyBlock.collapse(BLOCK);
-        }else{
+        }
+        else {
             lazyBlock.done(BLOCK);
         }
     }
@@ -1896,6 +1923,9 @@ public class KotlinParsing extends AbstractKotlinParsing {
 
                 if (!at(COMMA)) break;
                 advance(); // COMMA
+                if (at(GT)) {
+                    break;
+                }
             }
 
             expect(GT, "Missing '>'", recoverySet);
@@ -1969,6 +1999,14 @@ public class KotlinParsing extends AbstractKotlinParsing {
         parseTypeRef();
 
         constraint.done(TYPE_CONSTRAINT);
+    }
+
+    private boolean parseFunctionContract() {
+        if (at(CONTRACT_KEYWORD)) {
+            myExpressionParsing.parseContractDescriptionBlock();
+            return true;
+        }
+        return false;
     }
 
     /*
@@ -2263,6 +2301,9 @@ public class KotlinParsing extends AbstractKotlinParsing {
             projection.done(TYPE_PROJECTION);
             if (!at(COMMA)) break;
             advance(); // COMMA
+            if (at(GT)) {
+                break;
+            }
         }
 
         boolean atGT = at(GT);
@@ -2325,7 +2366,6 @@ public class KotlinParsing extends AbstractKotlinParsing {
                     errorAndAdvance("Expecting a parameter declaration");
                 }
                 else if (at(RPAR)) {
-                    error("Expecting a parameter declaration");
                     break;
                 }
 

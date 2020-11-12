@@ -16,6 +16,7 @@
 
 package org.jetbrains.kotlin.idea.project;
 
+import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.project.Project;
@@ -60,11 +61,10 @@ public class TargetPlatformDetector {
             return contextFile instanceof KtFile ? getPlatform((KtFile) contextFile) : JvmPlatforms.INSTANCE.getUnspecifiedJvmPlatform();
         }
 
-        if (file.isScript()) {
-            ScriptDefinition scriptDefinition = DefinitionsKt.findScriptDefinition(file);
-            if (scriptDefinition != null) {
-                return getPlatform(file.getProject(), scriptDefinition);
-            }
+        final ScriptDefinition scriptDefinition =
+                ReadAction.compute(() -> file.isScript() ? DefinitionsKt.findScriptDefinition(file) : null);
+        if (scriptDefinition != null) {
+            return getPlatform4Script(file.getProject(), file.getOriginalFile().getVirtualFile(), scriptDefinition);
         }
 
         VirtualFile virtualFile = file.getOriginalFile().getVirtualFile();
@@ -84,10 +84,21 @@ public class TargetPlatformDetector {
     }
 
     @NotNull
-    public static TargetPlatform getPlatform(@NotNull Project project, @NotNull ScriptDefinition scriptDefinition) {
-        String platformNameFromScriptDefinition = scriptDefinition.getPlatform();
+    public static TargetPlatform getPlatform4Script(
+            @NotNull Project project,
+            @NotNull VirtualFile file,
+            @NotNull ScriptDefinition scriptDefinition
+    ) {
         TargetPlatformVersion targetPlatformVersion =
-                IDELanguageSettingsProviderKt.getTargetPlatformVersionForScripts(project, scriptDefinition);
+                IDELanguageSettingsProviderKt.getTargetPlatformVersionForScript(project, file, scriptDefinition);
+        return getPlatform4ScriptImpl(targetPlatformVersion, scriptDefinition);
+    }
+
+    @NotNull
+    private static TargetPlatform getPlatform4ScriptImpl(
+            TargetPlatformVersion targetPlatformVersion,
+            @NotNull ScriptDefinition scriptDefinition
+    ) {
         if (!targetPlatformVersion.equals(TargetPlatformVersion.NoVersion.INSTANCE)) {
             for (TargetPlatform compilerPlatform : CommonPlatforms.INSTANCE.getAllSimplePlatforms()) {
                 SimplePlatform simplePlatform = CollectionsKt.single(compilerPlatform);
@@ -97,6 +108,7 @@ public class TargetPlatformDetector {
             }
         }
 
+        String platformNameFromScriptDefinition = scriptDefinition.getPlatform();
         for (TargetPlatform compilerPlatform : CommonPlatforms.INSTANCE.getAllSimplePlatforms()) {
             // FIXME(dsavvinov): get rid of matching by name
             SimplePlatform simplePlatform = CollectionsKt.single(compilerPlatform);
@@ -107,5 +119,4 @@ public class TargetPlatformDetector {
 
         return DefaultIdeTargetPlatformKindProvider.Companion.getDefaultPlatform();
     }
-
 }

@@ -1,4 +1,4 @@
-//FILE: test.kt
+// FILE: test.kt
 fun box() {
     val a = 1
     val b = 2
@@ -14,16 +14,14 @@ fun throwIfLess(a: Int, b: Int) {
     if (a<b)
         throw java.lang.IllegalStateException()
 }
-// IGNORE_BACKEND: JVM_IR
-// after throwing exception in try block, IR backend is returning a line number at line 6 instead of line 7 where catch statement is in.
 // LINENUMBERS
-// TestKt.box():3
-// TestKt.box():4
-// TestKt.box():5
-// TestKt.box():6
-// TestKt.throwIfLess(int, int):14
-// TestKt.throwIfLess(int, int):15
-// TestKt.box():7
-// TestKt.box():8
-// TestKt.throwIfLess(int, int):14
-// TestKt.throwIfLess(int, int):15
+// test.kt:3 box
+// test.kt:4 box
+// test.kt:5 box
+// test.kt:6 box
+// test.kt:14 throwIfLess
+// test.kt:15 throwIfLess
+// test.kt:7 box
+// test.kt:8 box
+// test.kt:14 throwIfLess
+// test.kt:15 throwIfLess

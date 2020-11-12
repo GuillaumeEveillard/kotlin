@@ -83,10 +83,10 @@ class JKKtWhenStatement(
 }
 
 class JKKtConvertedFromForLoopSyntheticWhileStatement(
-    variableDeclaration: JKStatement,
+    variableDeclarations: List<JKStatement>,
     whileStatement: JKWhileStatement
 ) : JKStatement() {
-    var variableDeclaration: JKStatement by child(variableDeclaration)
+    var variableDeclarations: List<JKStatement> by children(variableDeclarations)
     var whileStatement: JKWhileStatement by child(whileStatement)
     override fun accept(visitor: JKVisitor) = visitor.visitKtConvertedFromForLoopSyntheticWhileStatement(this)
 }
@@ -125,16 +125,18 @@ class JKJavaThrowStatement(exception: JKExpression) : JKStatement() {
 }
 
 class JKJavaTryStatement(
-    resourceDeclarations: List<JKDeclaration>,
+    resourceDeclarations: List<JKJavaResourceElement>,
     tryBlock: JKBlock,
     finallyBlock: JKBlock,
     catchSections: List<JKJavaTryCatchSection>
 ) : JKStatement() {
-    var resourceDeclarations: List<JKDeclaration> by children(resourceDeclarations)
+    var resourceDeclarations: List<JKJavaResourceElement> by children(resourceDeclarations)
     var tryBlock: JKBlock by child(tryBlock)
     var finallyBlock: JKBlock by child(finallyBlock)
     var catchSections: List<JKJavaTryCatchSection> by children(catchSections)
     override fun accept(visitor: JKVisitor) = visitor.visitJavaTryStatement(this)
+
+    val isTryWithResources get() = resourceDeclarations.isNotEmpty()
 }
 
 class JKJavaSynchronizedStatement(
@@ -154,7 +156,7 @@ class JKJavaAssertStatement(condition: JKExpression, description: JKExpression) 
 }
 
 class JKJavaForLoopStatement(
-    initializer: JKStatement,
+    initializers: List<JKStatement>,
     condition: JKExpression,
     updaters: List<JKStatement>,
     body: JKStatement
@@ -162,7 +164,7 @@ class JKJavaForLoopStatement(
     override var body by child(body)
     var updaters by children(updaters)
     var condition by child(condition)
-    var initializer by child(initializer)
+    var initializers by children(initializers)
 
     override fun accept(visitor: JKVisitor) = visitor.visitJavaForLoopStatement(this)
 }

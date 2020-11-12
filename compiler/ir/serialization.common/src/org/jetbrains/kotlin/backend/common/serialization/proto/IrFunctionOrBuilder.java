@@ -17,55 +17,27 @@ public interface IrFunctionOrBuilder extends
   org.jetbrains.kotlin.backend.common.serialization.proto.IrFunctionBase getBase();
 
   /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.ModalityKind modality = 2;</code>
-   */
-  boolean hasModality();
-  /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.ModalityKind modality = 2;</code>
-   */
-  org.jetbrains.kotlin.backend.common.serialization.proto.ModalityKind getModality();
-
-  /**
-   * <code>required bool is_tailrec = 3;</code>
-   */
-  boolean hasIsTailrec();
-  /**
-   * <code>required bool is_tailrec = 3;</code>
-   */
-  boolean getIsTailrec();
-
-  /**
-   * <code>required bool is_suspend = 4;</code>
-   */
-  boolean hasIsSuspend();
-  /**
-   * <code>required bool is_suspend = 4;</code>
-   */
-  boolean getIsSuspend();
-
-  /**
-   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex overridden = 5;</code>
+   * <code>repeated int64 overridden = 2 [packed = true];</code>
    *
    * <pre>
-   *optional UniqId corresponding_property = 7;
+   * TODO: supposed to be deleted
    * </pre>
    */
-  java.util.List<org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex> 
-      getOverriddenList();
+  java.util.List<java.lang.Long> getOverriddenList();
   /**
-   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex overridden = 5;</code>
+   * <code>repeated int64 overridden = 2 [packed = true];</code>
    *
    * <pre>
-   *optional UniqId corresponding_property = 7;
-   * </pre>
-   */
-  org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex getOverridden(int index);
-  /**
-   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex overridden = 5;</code>
-   *
-   * <pre>
-   *optional UniqId corresponding_property = 7;
+   * TODO: supposed to be deleted
    * </pre>
    */
   int getOverriddenCount();
+  /**
+   * <code>repeated int64 overridden = 2 [packed = true];</code>
+   *
+   * <pre>
+   * TODO: supposed to be deleted
+   * </pre>
+   */
+  long getOverridden(int index);
 }

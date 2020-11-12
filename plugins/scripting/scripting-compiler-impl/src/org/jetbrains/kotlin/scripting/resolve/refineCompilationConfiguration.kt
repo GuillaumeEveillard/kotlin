@@ -6,11 +6,13 @@
 package org.jetbrains.kotlin.scripting.resolve
 
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.CharsetToolkit
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
 import com.intellij.testFramework.LightVirtualFile
@@ -18,8 +20,11 @@ import kotlinx.coroutines.runBlocking
 import org.jetbrains.kotlin.idea.KotlinLanguage
 import org.jetbrains.kotlin.psi.KtAnnotationEntry
 import org.jetbrains.kotlin.psi.KtFile
+import org.jetbrains.kotlin.psi.psiUtil.endOffset
+import org.jetbrains.kotlin.psi.psiUtil.startOffset
 import org.jetbrains.kotlin.scripting.definitions.KotlinScriptDefinition
 import org.jetbrains.kotlin.scripting.definitions.ScriptDefinition
+import org.jetbrains.kotlin.scripting.definitions.runReadAction
 import org.jetbrains.kotlin.scripting.withCorrectExtension
 import java.io.File
 import java.net.URL
@@ -41,7 +46,9 @@ internal fun VirtualFile.loadAnnotations(
 ): List<Annotation> =
 // TODO_R: report error on failure to load annotation class
     ApplicationManager.getApplication().runReadAction<List<Annotation>> {
-        this.getAnnotationEntries(project).construct(classLoader, acceptedAnnotations, project)
+        this.getAnnotationEntries(project)
+            .construct(classLoader, acceptedAnnotations, project)
+            .map { it.first }
     }
 
 internal fun VirtualFile.getAnnotationEntries(project: Project): Iterable<KtAnnotationEntry> {
@@ -55,8 +62,7 @@ internal fun VirtualFile.getAnnotationEntries(project: Project): Iterable<KtAnno
  * The implementation of the SourceCode for a script located in a virtual file
  */
 open class VirtualFileScriptSource(val virtualFile: VirtualFile, private val preloadedText: String? = null) :
-    FileBasedScriptSource()
-{
+    FileBasedScriptSource() {
     override val file: File get() = File(virtualFile.path)
     override val externalLocation: URL get() = URL(virtualFile.url)
     override val text: String by lazy { preloadedText ?: virtualFile.inputStream.bufferedReader().readText() }
@@ -79,9 +85,7 @@ open class KtFileScriptSource(val ktFile: KtFile, preloadedText: String? = null)
     override val name: String? get() = ktFile.name
 
     override fun equals(other: Any?): Boolean =
-        this === other
-                || (other as? KtFileScriptSource)?.let { ktFile == it.ktFile } == true
-                || super.equals(other)
+        this === other || (other as? KtFileScriptSource)?.let { ktFile == it.ktFile } == true
 
     override fun hashCode(): Int = ktFile.hashCode()
 }
@@ -114,7 +118,7 @@ abstract class ScriptCompilationConfigurationWrapper(val script: SourceCode) {
     abstract val dependenciesSources: List<File>
     abstract val javaHome: File?
     abstract val defaultImports: List<String>
-    abstract val importedScripts: List<File>
+    abstract val importedScripts: List<SourceCode>
 
     override fun equals(other: Any?): Boolean = script == (other as? ScriptCompilationConfigurationWrapper)?.script
 
@@ -136,14 +140,13 @@ abstract class ScriptCompilationConfigurationWrapper(val script: SourceCode) {
         }
 
         override val javaHome: File?
-            get() = configuration?.get(ScriptCompilationConfiguration.hostConfiguration)?.get(ScriptingHostConfiguration.jvm.jdkHome)
+            get() = configuration?.get(ScriptCompilationConfiguration.jvm.jdkHome)
 
         override val defaultImports: List<String>
             get() = configuration?.get(ScriptCompilationConfiguration.defaultImports).orEmpty()
 
-        override val importedScripts: List<File>
-            get() = configuration?.get(ScriptCompilationConfiguration.importScripts)
-                ?.mapNotNull { (it as? FileBasedScriptSource)?.file }.orEmpty()
+        override val importedScripts: List<SourceCode>
+            get() = configuration?.get(ScriptCompilationConfiguration.importScripts).orEmpty()
 
         @Suppress("OverridingDeprecatedMember")
         override val legacyDependencies: ScriptDependencies?
@@ -178,8 +181,8 @@ abstract class ScriptCompilationConfigurationWrapper(val script: SourceCode) {
         override val defaultImports: List<String>
             get() = legacyDependencies?.imports.orEmpty()
 
-        override val importedScripts: List<File>
-            get() = legacyDependencies?.scripts.orEmpty()
+        override val importedScripts: List<SourceCode>
+            get() = legacyDependencies?.scripts?.map { FileScriptSource(it) }.orEmpty()
 
         override val configuration: ScriptCompilationConfiguration?
             get() {
@@ -226,13 +229,17 @@ fun refineScriptCompilationConfiguration(
     if (legacyDefinition == null) {
         val compilationConfiguration = definition.compilationConfiguration
         val collectedData =
-            getScriptCollectedData(ktFileSource.ktFile, compilationConfiguration, project, definition.contextClassLoader)
-
+            runReadAction {
+                getScriptCollectedData(ktFileSource.ktFile, compilationConfiguration, project, definition.contextClassLoader)
+            }
         return compilationConfiguration.refineOnAnnotations(script, collectedData)
             .onSuccess {
                 it.refineBeforeCompiling(script, collectedData)
             }.onSuccess {
-                ScriptCompilationConfigurationWrapper.FromCompilationConfiguration(ktFileSource, it).asSuccess()
+                ScriptCompilationConfigurationWrapper.FromCompilationConfiguration(
+                    ktFileSource,
+                    it.adjustByDefinition(definition)
+                ).asSuccess()
             }
     } else {
         val file = script.getVirtualFile(definition)
@@ -263,10 +270,26 @@ fun refineScriptCompilationConfiguration(
         else
             ScriptCompilationConfigurationWrapper.FromLegacy(
                 ktFileSource,
-                result.dependencies?.adjustByDefinition(definition.legacyDefinition),
+                result.dependencies?.adjustByDefinition(definition),
                 definition
             ).asSuccess(result.reports.mapToDiagnostics())
     }
+}
+
+fun ScriptDependencies.adjustByDefinition(definition: ScriptDefinition): ScriptDependencies {
+    val additionalClasspath = additionalClasspath(definition).filterNot { classpath.contains(it) }
+    if (additionalClasspath.isEmpty()) return this
+
+    return copy(classpath = classpath + additionalClasspath)
+}
+
+fun ScriptCompilationConfiguration.adjustByDefinition(definition: ScriptDefinition): ScriptCompilationConfiguration {
+    return this.withUpdatedClasspath(additionalClasspath(definition))
+}
+
+private fun additionalClasspath(definition: ScriptDefinition): List<File> {
+    return (definition.asLegacyOrNull<KotlinScriptDefinitionFromAnnotatedTemplate>()?.templateClasspath
+        ?: definition.hostConfiguration[ScriptingHostConfiguration.configurationDependencies].toClassPathOrEmpty())
 }
 
 internal fun makeScriptContents(
@@ -284,8 +307,7 @@ internal fun makeScriptContents(
 fun SourceCode.getVirtualFile(definition: ScriptDefinition): VirtualFile {
     if (this is VirtualFileScriptSource) return virtualFile
     if (this is KtFileScriptSource) {
-        val vFile = virtualFile
-        if (vFile != null) return vFile
+        return virtualFile
     }
     if (this is FileScriptSource) {
         val vFile = LocalFileSystem.getInstance().findFileByIoFile(file)
@@ -335,30 +357,64 @@ fun getScriptCollectedData(
     val acceptedAnnotations =
         compilationConfiguration[ScriptCompilationConfiguration.refineConfigurationOnAnnotations]?.flatMap {
             it.annotations.mapNotNull { ann ->
+                @Suppress("UNCHECKED_CAST")
                 jvmGetScriptingClass(ann, contextClassLoader, hostConfiguration) as? KClass<Annotation> // TODO errors
             }
         }.orEmpty()
-    val annotations = scriptFile.annotationEntries.construct(contextClassLoader, acceptedAnnotations, project)
+    val annotations = scriptFile.annotationEntries.construct(
+        contextClassLoader,
+        acceptedAnnotations,
+        project,
+        scriptFile.viewProvider.document,
+        scriptFile.virtualFilePath
+    )
     return ScriptCollectedData(
         mapOf(
-            ScriptCollectedData.foundAnnotations to annotations
+            ScriptCollectedData.collectedAnnotations to annotations,
+            ScriptCollectedData.foundAnnotations to annotations.map { it.annotation }
         )
     )
 }
 
 private fun Iterable<KtAnnotationEntry>.construct(
+    classLoader: ClassLoader?, acceptedAnnotations: List<KClass<out Annotation>>, project: Project, document: Document?, filePath: String
+): List<ScriptSourceAnnotation<*>> = construct(classLoader, acceptedAnnotations, project).map { (annotation, psiAnn) ->
+    ScriptSourceAnnotation(
+        annotation = annotation,
+        location = document?.let { document ->
+            SourceCode.LocationWithId(
+                codeLocationId = filePath,
+                locationInText = psiAnn.location(document)
+            )
+        }
+    )
+}
+
+private fun Iterable<KtAnnotationEntry>.construct(
     classLoader: ClassLoader?, acceptedAnnotations: List<KClass<out Annotation>>, project: Project
-): List<Annotation> =
+): List<Pair<Annotation, KtAnnotationEntry>> =
     mapNotNull { psiAnn ->
         // TODO: consider advanced matching using semantic similar to actual resolving
         acceptedAnnotations.find { ann ->
             psiAnn.typeName.let { it == ann.simpleName || it == ann.qualifiedName }
         }?.let {
             @Suppress("UNCHECKED_CAST")
-            (constructAnnotation(
+            constructAnnotation(
                 psiAnn,
                 (classLoader ?: ClassLoader.getSystemClassLoader()).loadClass(it.qualifiedName).kotlin as KClass<out Annotation>,
                 project
-            ))
+            ) to psiAnn
         }
     }
+
+private fun PsiElement.location(document: Document): SourceCode.Location {
+    val start = document.offsetToPosition(startOffset)
+    val end = if (endOffset > startOffset) document.offsetToPosition(endOffset) else null
+    return SourceCode.Location(start, end)
+}
+
+private fun Document.offsetToPosition(offset: Int): SourceCode.Position {
+    val line = getLineNumber(offset)
+    val column = offset - getLineStartOffset(line)
+    return SourceCode.Position(line + 1, column + 1, offset)
+}

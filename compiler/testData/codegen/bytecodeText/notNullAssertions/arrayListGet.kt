@@ -1,5 +1,4 @@
-// IGNORE_BACKEND: JVM_IR
-// Missing IMPLICIT_NOTNULL casts
+// IGNORE_BACKEND_FIR: JVM_IR
 import java.util.ArrayList
 
 fun foo(): Any {
@@ -10,7 +9,7 @@ fun foo(): Any {
 fun bar(a: ArrayList<String>) {
 }
 
-// 1 checkExpressionValueIsNotNull
-// 0 checkNotNullExpressionValue
-// 1 checkParameterIsNotNull
-// 0 checkNotNullParameter
+// 0 checkExpressionValueIsNotNull
+// 1 checkNotNullExpressionValue
+// 0 checkParameterIsNotNull
+// 1 checkNotNullParameter

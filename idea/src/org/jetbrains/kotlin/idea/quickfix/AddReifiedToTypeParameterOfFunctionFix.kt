@@ -38,19 +38,22 @@ import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiFile
 import org.jetbrains.kotlin.diagnostics.Diagnostic
 import org.jetbrains.kotlin.diagnostics.Errors
+import org.jetbrains.kotlin.idea.KotlinBundle
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.KtNamedFunction
 import org.jetbrains.kotlin.psi.KtTypeParameter
 import org.jetbrains.kotlin.psi.psiUtil.getStrictParentOfType
 
 class AddReifiedToTypeParameterOfFunctionFix(
-        typeParameter: KtTypeParameter,
-        val function: KtNamedFunction
+    typeParameter: KtTypeParameter,
+    function: KtNamedFunction
 ) : AddModifierFix(typeParameter, KtTokens.REIFIED_KEYWORD) {
 
     private val inlineFix = AddInlineToFunctionWithReifiedFix(function)
+    private val elementName = getElementName(function)
 
-    override fun getText() = element?.let { "Make ${getElementName(it)} reified and ${getElementName(function)} inline" } ?: ""
+    override fun getText() =
+        element?.let { KotlinBundle.message("fix.make.type.parameter.reified", getElementName(it), elementName) } ?: ""
 
     override fun invokeImpl(project: Project, editor: Editor?, file: PsiFile) {
         super.invokeImpl(project, editor, file)

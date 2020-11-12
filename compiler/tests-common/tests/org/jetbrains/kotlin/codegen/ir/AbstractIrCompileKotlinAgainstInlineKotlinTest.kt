@@ -6,11 +6,22 @@
 package org.jetbrains.kotlin.codegen.ir
 
 import org.jetbrains.kotlin.codegen.AbstractCompileKotlinAgainstInlineKotlinTest
-import org.jetbrains.kotlin.config.CompilerConfiguration
-import org.jetbrains.kotlin.config.JVMConfigurationKeys
 import org.jetbrains.kotlin.test.TargetBackend
 
 abstract class AbstractIrCompileKotlinAgainstInlineKotlinTest : AbstractCompileKotlinAgainstInlineKotlinTest() {
-    override fun updateConfiguration(configuration: CompilerConfiguration) = configuration.put(JVMConfigurationKeys.IR, true)
-    override fun getBackend() = TargetBackend.JVM_IR
+    override val backend: TargetBackend get() = TargetBackend.JVM_IR
+}
+
+abstract class AbstractJvmIrAgainstOldBoxInlineTest : AbstractIrCompileKotlinAgainstInlineKotlinTest() {
+    override val backend: TargetBackend get() = TargetBackend.JVM_MULTI_MODULE_IR_AGAINST_OLD
+
+    override fun getBackendA(): TargetBackend = TargetBackend.JVM
+    override fun getBackendB(): TargetBackend = TargetBackend.JVM_IR
+}
+
+abstract class AbstractJvmOldAgainstIrBoxInlineTest : AbstractIrCompileKotlinAgainstInlineKotlinTest() {
+    override val backend: TargetBackend get() = TargetBackend.JVM_MULTI_MODULE_OLD_AGAINST_IR
+
+    override fun getBackendA(): TargetBackend = TargetBackend.JVM_IR
+    override fun getBackendB(): TargetBackend = TargetBackend.JVM
 }

@@ -11,6 +11,7 @@ import org.jetbrains.kotlin.test.JUnit3WithIdeaConfigurationRunner;
 import org.junit.runner.RunWith;
 
 import java.util.Collection;
+
 @RunWith(JUnit3WithIdeaConfigurationRunner.class)
 public class LoadVersionsFromMavenTest extends LightIdeaTestCase {
     public void testDownload() throws Exception {

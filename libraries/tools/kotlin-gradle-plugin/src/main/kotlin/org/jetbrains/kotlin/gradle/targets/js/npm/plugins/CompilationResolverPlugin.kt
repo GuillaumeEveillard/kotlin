@@ -5,13 +5,16 @@
 
 package org.jetbrains.kotlin.gradle.targets.js.npm.plugins
 
+import org.gradle.api.artifacts.FileCollectionDependency
 import org.jetbrains.kotlin.gradle.targets.js.npm.NpmDependency
 import org.jetbrains.kotlin.gradle.targets.js.npm.resolver.KotlinCompilationNpmResolver
 
 internal interface CompilationResolverPlugin {
     fun hookDependencies(
-        internalDependencies: MutableSet<KotlinCompilationNpmResolver>,
-        externalGradleDependencies: MutableSet<KotlinCompilationNpmResolver.ExternalGradleDependency>,
-        externalNpmDependencies: MutableSet<NpmDependency>
+        internalDependencies: Set<KotlinCompilationNpmResolver>,
+        internalCompositeDependencies: Set<KotlinCompilationNpmResolver.CompositeDependency>,
+        externalGradleDependencies: Set<KotlinCompilationNpmResolver.ExternalGradleDependency>,
+        externalNpmDependencies: Set<NpmDependency>,
+        fileCollectionDependencies: Set<FileCollectionDependency>
     )
 }

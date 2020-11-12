@@ -6,14 +6,20 @@
 package org.jetbrains.kotlin.test
 
 enum class TargetBackend(
+    val isIR: Boolean,
     private val compatibleWithTargetBackend: TargetBackend? = null
 ) {
-    ANY,
-    JVM,
-    JVM_IR(JVM),
-    JS,
-    JS_IR(JS),
-    WASM;
+    ANY(false),
+    JVM(false),
+    JVM_OLD(false, JVM),
+    JVM_IR(true, JVM),
+    JVM_MULTI_MODULE_IR_AGAINST_OLD(true, JVM_IR),
+    JVM_MULTI_MODULE_OLD_AGAINST_IR(false, JVM),
+    JS(false),
+    JS_IR(true, JS),
+    JS_IR_ES6(true, JS_IR),
+    WASM(true),
+    ANDROID(false, JVM);
 
     val compatibleWith get() = compatibleWithTargetBackend ?: ANY
 }

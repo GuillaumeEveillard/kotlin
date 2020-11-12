@@ -26,18 +26,13 @@ import com.intellij.openapi.diagnostic.Logger
 import com.sun.jdi.VMDisconnectedException
 import com.sun.jdi.request.StepRequest
 import org.intellij.lang.annotations.MagicConstant
+import org.jetbrains.kotlin.idea.debugger.safeLocation
 import java.lang.reflect.Field
 
 internal class RequestHintWithMethodFilter(
     stepThread: ThreadReferenceProxyImpl,
     suspendContext: SuspendContextImpl,
-    @MagicConstant(
-        intValues = longArrayOf(
-            StepRequest.STEP_INTO.toLong(),
-            StepRequest.STEP_OVER.toLong(),
-            StepRequest.STEP_OUT.toLong()
-        )
-    ) depth: Int,
+    @MagicConstant(intValues = [StepRequest.STEP_INTO.toLong(), StepRequest.STEP_OVER.toLong(), StepRequest.STEP_OUT.toLong()]) depth: Int,
     methodFilter: MethodFilter
 ) : RequestHint(stepThread, suspendContext, methodFilter) {
     private var targetMethodMatched = false
@@ -49,7 +44,7 @@ internal class RequestHintWithMethodFilter(
         }
     }
 
-    private fun findFieldWithValue(value: Int, type: Class<*>): Field? {
+    private fun findFieldWithValue(@Suppress("SameParameterValue") value: Int, @Suppress("SameParameterValue") type: Class<*>): Field? {
         return RequestHint::class.java.declaredFields.firstOrNull { field ->
             if (field.type == type) {
                 field.isAccessible = true
@@ -69,7 +64,7 @@ internal class RequestHintWithMethodFilter(
 
             if (filter != null && frameProxy != null && filter !is BreakpointStepMethodFilter) {
                 /*NODE: Debugger API. Base implementation works only for smart step into, and calls filter only if !isTheSameFrame(context). */
-                if (filter.locationMatches(context.debugProcess, frameProxy.location())) {
+                if (filter.locationMatches(context.debugProcess, frameProxy.safeLocation())) {
                     targetMethodMatched = true
                     return filter.onReached(context, this)
                 }

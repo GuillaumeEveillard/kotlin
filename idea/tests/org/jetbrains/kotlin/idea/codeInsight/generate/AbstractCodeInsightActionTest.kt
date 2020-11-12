@@ -18,10 +18,10 @@ import org.jetbrains.kotlin.idea.project.forcedTargetPlatform
 import org.jetbrains.kotlin.idea.test.ConfigLibraryUtil
 import org.jetbrains.kotlin.idea.test.KotlinLightCodeInsightFixtureTestCase
 import org.jetbrains.kotlin.idea.test.KotlinWithJdkAndRuntimeLightProjectDescriptor
-import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.platform.CommonPlatforms
 import org.jetbrains.kotlin.platform.js.JsPlatforms
 import org.jetbrains.kotlin.platform.jvm.JvmPlatforms
+import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.test.InTextDirectivesUtils
 import org.jetbrains.kotlin.test.KotlinTestUtils
 import java.io.File
@@ -50,7 +50,7 @@ abstract class AbstractCodeInsightActionTest : KotlinLightCodeInsightFixtureTest
     }
 
     protected open fun doTest(path: String) {
-        val fileText = FileUtil.loadFile(File(path), true)
+        val fileText = FileUtil.loadFile(testDataFile(), true)
 
         val conflictFile = File("$path.messages")
         val afterFile = File("$path.after")
@@ -60,19 +60,19 @@ abstract class AbstractCodeInsightActionTest : KotlinLightCodeInsightFixtureTest
         try {
             ConfigLibraryUtil.configureLibrariesByDirective(module, PlatformTestUtil.getCommunityPath(), fileText)
 
-            val mainFile = File(path)
+            val mainFile = testDataFile()
             val mainFileName = mainFile.name
             val fileNameBase = mainFile.nameWithoutExtension + "."
             val rootDir = mainFile.parentFile
             rootDir
-                    .list { _, name ->
-                        name.startsWith(fileNameBase) && name != mainFileName && (name.endsWith(".kt") || name.endsWith(".java"))
-                    }
-                    .forEach {
-                        myFixture.configureByFile(File(rootDir, it).path.replace(File.separator, "/"))
-                    }
+                .list { _, name ->
+                    name.startsWith(fileNameBase) && name != mainFileName && (name.endsWith(".kt") || name.endsWith(".java"))
+                }
+                .forEach {
+                    myFixture.configureByFile(it)
+                }
 
-            configure(path, fileText)
+            configure(fileName(), fileText)
             mainPsiFile = myFixture.file as KtFile
 
             val targetPlatformName = InTextDirectivesUtils.findStringWithPrefixes(fileText, "// PLATFORM: ")
@@ -103,14 +103,11 @@ abstract class AbstractCodeInsightActionTest : KotlinLightCodeInsightFixtureTest
                 myFixture.checkResult(FileUtil.loadFile(afterFile, true))
                 checkExtra()
             }
-        }
-        catch (e: ComparisonFailure) {
+        } catch (e: ComparisonFailure) {
             KotlinTestUtils.assertEqualsToFile(afterFile, myFixture.editor)
-        }
-        catch (e: CommonRefactoringUtil.RefactoringErrorHintException) {
+        } catch (e: CommonRefactoringUtil.RefactoringErrorHintException) {
             KotlinTestUtils.assertEqualsToFile(conflictFile, e.message!!)
-        }
-        finally {
+        } finally {
             mainPsiFile?.forcedTargetPlatform = null
             ConfigLibraryUtil.unconfigureLibrariesByDirective(module, fileText)
         }

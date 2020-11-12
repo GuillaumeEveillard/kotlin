@@ -29,9 +29,7 @@ dependencies {
 
     testRuntimeOnly(intellijCoreDep()) { includeJars("intellij-core") }
 
-    Platform[192].orHigher {
-        testRuntimeOnly(intellijDep()) { includeJars("platform-concurrency", "platform-objectSerializer") }
-    }
+    testRuntimeOnly(intellijDep()) { includeJars("platform-concurrency", "platform-objectSerializer") }
 
     shadows(project(":kotlinx-metadata-jvm", configuration = "runtime"))
     shadows("org.jetbrains.intellij.deps:asm-all:$kotlinpAsmVersion")
@@ -70,6 +68,6 @@ tasks {
 
 tasks.withType<KotlinCompile> {
     kotlinOptions {
-        freeCompilerArgs += listOf("-Xuse-experimental=kotlin.Experimental")
+        freeCompilerArgs += listOf("-Xopt-in=kotlin.RequiresOptIn")
     }
 }

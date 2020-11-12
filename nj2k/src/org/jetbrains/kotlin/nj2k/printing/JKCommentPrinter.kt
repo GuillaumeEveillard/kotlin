@@ -5,6 +5,7 @@
 
 package org.jetbrains.kotlin.nj2k.printing
 
+import com.intellij.openapi.util.text.StringUtil
 import org.jetbrains.kotlin.nj2k.tree.JKComment
 import org.jetbrains.kotlin.nj2k.tree.JKDeclaration
 import org.jetbrains.kotlin.nj2k.tree.JKFormattingOwner
@@ -20,9 +21,10 @@ internal class JKCommentPrinter(val printer: JKPrinter) {
         if (this !in printedTokens) {
             printedTokens += this
 
-            // hack till #KT-16845 is fixed
-            if (!isSingleline && text.endsWith("/*/")) {
-                text.replaceRange(text.length - "/*/".length, text.length, "/ */")
+            // hack till #KT-16845, #KT-23333 are fixed
+            if (!isSingleline && text.lastIndexOf("/*") != text.indexOf("/*")) {
+                text.replace("/*", "/ *")
+                    .replaceFirst("/ *", "/*")
             } else text
         } else null
 
@@ -32,7 +34,8 @@ internal class JKCommentPrinter(val printer: JKPrinter) {
         for (comment in this@createText) {
             if (comment.shouldBeDropped()) continue
             val text = comment.createText() ?: continue
-            if (needNewLine) appendln() else append(' ')
+            if (needNewLine && comment.indent?.let { StringUtil.containsLineBreak(it) } != true) appendLine()
+            append(comment.indent ?: ' ')
             append(text)
             needNewLine = text.startsWith("//") || '\n' in text
         }

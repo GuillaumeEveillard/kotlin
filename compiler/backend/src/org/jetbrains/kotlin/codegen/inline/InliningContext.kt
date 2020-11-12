@@ -27,7 +27,8 @@ class RegeneratedClassContext(
     nameGenerator: NameGenerator,
     typeRemapper: TypeRemapper,
     lambdaInfo: LambdaInfo?,
-    override val callSiteInfo: InlineCallSiteInfo
+    override val callSiteInfo: InlineCallSiteInfo,
+    override val transformationInfo: TransformationInfo
 ) : InliningContext(
     parent, expressionMap, state, nameGenerator, typeRemapper, lambdaInfo, true
 ) {
@@ -48,7 +49,8 @@ open class InliningContext(
 
     var generateAssertField = false
 
-    private val internalNameToAnonymousObjectTransformationInfo = hashMapOf<String, AnonymousObjectTransformationInfo>()
+    open val transformationInfo: TransformationInfo?
+        get() = null
 
     var isContinuation: Boolean = false
 
@@ -57,12 +59,13 @@ open class InliningContext(
     val root: RootInliningContext
         get() = if (isRoot) this as RootInliningContext else parent!!.root
 
-    fun findAnonymousObjectTransformationInfo(internalName: String, searchInParent: Boolean = true): AnonymousObjectTransformationInfo? =
-        internalNameToAnonymousObjectTransformationInfo[internalName]
-            ?: if (searchInParent) parent?.findAnonymousObjectTransformationInfo(internalName, searchInParent) else null
+    private val regeneratedAnonymousObjects = hashSetOf<String>()
 
-    fun recordIfNotPresent(internalName: String, info: AnonymousObjectTransformationInfo) {
-        internalNameToAnonymousObjectTransformationInfo.putIfAbsent(internalName, info)
+    fun isRegeneratedAnonymousObject(internalName: String): Boolean =
+        internalName in regeneratedAnonymousObjects || (parent != null && parent.isRegeneratedAnonymousObject(internalName))
+
+    fun recordRegeneratedAnonymousObject(internalName: String) {
+        regeneratedAnonymousObjects.add(internalName)
     }
 
     fun subInlineLambda(lambdaInfo: LambdaInfo): InliningContext =
@@ -70,23 +73,31 @@ open class InliningContext(
             nameGenerator.subGenerator("lambda"),
             //mark lambda inlined
             hashMapOf(lambdaInfo.lambdaClassType.internalName to null),
-            lambdaInfo
+            lambdaInfo,
+            // TODO we also want this for the old backend (KT-28064), but this changes EnclosingMethod of objects
+            //      in inline lambdas, so use a language version flag.
+            if (state.isIrBackend)
+                false // Do not regenerate objects in lambdas inlined into regenerated objects unless needed for some other reason.
+            else
+                classRegeneration
         )
 
     fun subInlineWithClassRegeneration(
         generator: NameGenerator,
         newTypeMappings: MutableMap<String, String?>,
-        callSiteInfo: InlineCallSiteInfo
+        callSiteInfo: InlineCallSiteInfo,
+        transformationInfo: TransformationInfo
     ): InliningContext = RegeneratedClassContext(
         this, expressionMap, state, generator, TypeRemapper.createFrom(typeRemapper, newTypeMappings),
-        lambdaInfo, callSiteInfo
+        lambdaInfo, callSiteInfo, transformationInfo
     )
 
     @JvmOverloads
     fun subInline(
         generator: NameGenerator,
         additionalTypeMappings: Map<String, String?> = emptyMap(),
-        lambdaInfo: LambdaInfo? = this.lambdaInfo
+        lambdaInfo: LambdaInfo? = this.lambdaInfo,
+        classRegeneration: Boolean = this.classRegeneration
     ): InliningContext {
         val isInliningLambda = lambdaInfo != null
         return InliningContext(

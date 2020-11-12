@@ -1,4 +1,3 @@
-
 import org.jetbrains.dokka.gradle.DokkaTask
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.jetbrains.kotlin.pill.PillExtension
@@ -9,6 +8,13 @@ plugins {
     `java-gradle-plugin`
     id("org.jetbrains.dokka")
     id("jps-compatible")
+}
+
+apply(from = "functionalTest.gradle.kts")
+val functionalTestImplementation by configurations
+
+configure<GradlePluginDevelopmentExtension> {
+    isAutomatedPublishing = false
 }
 
 publish()
@@ -35,7 +41,8 @@ dependencies {
     compileOnly(project(":daemon-common"))
 
     compile(kotlinStdlib())
-    compile(project(":kotlin-native:kotlin-native-utils"))
+    compile(project(":kotlin-util-klib"))
+    compileOnly(project(":native:kotlin-native-utils"))
     compileOnly(project(":kotlin-reflect-api"))
     compileOnly(project(":kotlin-android-extensions"))
     compileOnly(project(":kotlin-build-common"))
@@ -43,10 +50,15 @@ dependencies {
     compileOnly(project(":kotlin-annotation-processing"))
     compileOnly(project(":kotlin-annotation-processing-gradle"))
     compileOnly(project(":kotlin-scripting-compiler"))
+    compileOnly(project(":kotlin-gradle-statistics"))
+    embedded(project(":kotlin-gradle-statistics"))
+    compileOnly(project(":kotlin-gradle-build-metrics"))
+    embedded(project(":kotlin-gradle-build-metrics"))
 
     compile("com.google.code.gson:gson:${rootProject.extra["versions.jar.gson"]}")
-    compile("de.undercouch:gradle-download-task:3.4.3")
-    
+    compile("de.undercouch:gradle-download-task:4.0.2")
+    implementation("com.github.gundy:semver4j:0.16.4")
+
     compileOnly("com.android.tools.build:gradle:2.0.0")
     compileOnly("com.android.tools.build:gradle-core:2.0.0")
     compileOnly("com.android.tools.build:builder:2.0.0")
@@ -56,40 +68,27 @@ dependencies {
 
     compileOnly(intellijCoreDep()) { includeJars("intellij-core") }
 
-    runtime(projectRuntimeJar(":kotlin-compiler-embeddable"))
-    runtime(projectRuntimeJar(":kotlin-annotation-processing-gradle"))
-    runtime(projectRuntimeJar(":kotlin-android-extensions"))
-    runtime(projectRuntimeJar(":kotlin-compiler-runner"))
-    runtime(projectRuntimeJar(":kotlin-scripting-compiler-embeddable"))
-    runtime(projectRuntimeJar(":kotlin-scripting-compiler-impl-embeddable"))
-    runtime(project(":kotlin-reflect"))
+    runtimeOnly(projectRuntimeJar(":kotlin-compiler-embeddable"))
+    runtimeOnly(projectRuntimeJar(":kotlin-annotation-processing-gradle"))
+    runtimeOnly(projectRuntimeJar(":kotlin-android-extensions"))
+    runtimeOnly(projectRuntimeJar(":kotlin-compiler-runner"))
+    runtimeOnly(projectRuntimeJar(":kotlin-scripting-compiler-embeddable"))
+    runtimeOnly(projectRuntimeJar(":kotlin-scripting-compiler-impl-embeddable"))
+    runtimeOnly(project(":kotlin-reflect"))
 
     jarContents(compileOnly(intellijDep()) {
-        includeJars("asm-all", "gson", rootProject = rootProject)
+        includeJars("asm-all", "gson", "serviceMessages", rootProject = rootProject)
     })
-
-    jarContents(compileOnly(intellijDep()) {
-        if (Platform.P193.orHigher()) {
-            includeJars("teamcity-service-messages", rootProject = rootProject)
-        } else {
-            includeJars("serviceMessages", rootProject = rootProject)
-        }
-    })
-
 
     // com.android.tools.build:gradle has ~50 unneeded transitive dependencies
     compileOnly("com.android.tools.build:gradle:3.0.0") { isTransitive = false }
     compileOnly("com.android.tools.build:gradle-core:3.0.0") { isTransitive = false }
     compileOnly("com.android.tools.build:builder-model:3.0.0") { isTransitive = false }
-
-    testCompile(intellijDep()) { includeJars( "junit", rootProject = rootProject) }
-    testCompile(intellijDep()) {
-        if (Platform.P193.orHigher()) {
-            includeJars("teamcity-service-messages", rootProject = rootProject)
-        } else {
-            includeJars("serviceMessages", rootProject = rootProject)
-        }
+    functionalTestImplementation("com.android.tools.build:gradle:4.0.1") {
+        because("Functional tests are using APIs from Android. Latest Version is used to avoid NoClassDefFoundError")
     }
+
+    testCompile(intellijDep()) { includeJars("junit", "serviceMessages", rootProject = rootProject) }
 
     testCompileOnly(project(":compiler"))
     testCompile(projectTests(":kotlin-build-common"))
@@ -97,6 +96,7 @@ dependencies {
     testCompile(project(":kotlin-compiler-runner"))
     testCompile(project(":kotlin-test::kotlin-test-junit"))
     testCompile("junit:junit:4.12")
+    testCompile(project(":kotlin-gradle-statistics"))
     testCompileOnly(project(":kotlin-reflect-api"))
     testCompileOnly(project(":kotlin-annotation-processing"))
     testCompileOnly(project(":kotlin-annotation-processing-gradle"))
@@ -111,7 +111,7 @@ runtimeJar(rewriteDefaultJarDepsToShadedCompiler()).configure {
 
     from {
         jarContents.asFileTree.map {
-            if (it.endsWith(".jar")) zipTree(it) 
+            if (it.endsWith(".jar")) zipTree(it)
             else it
         }
     }
@@ -120,9 +120,9 @@ runtimeJar(rewriteDefaultJarDepsToShadedCompiler()).configure {
 tasks {
     withType<KotlinCompile> {
         kotlinOptions.jdkHome = rootProject.extra["JDK_18"] as String
-        kotlinOptions.languageVersion = "1.2"
-        kotlinOptions.apiVersion = "1.2"
-        kotlinOptions.freeCompilerArgs += listOf("-Xskip-metadata-version-check")
+        kotlinOptions.languageVersion = "1.3"
+        kotlinOptions.apiVersion = "1.3"
+        kotlinOptions.freeCompilerArgs += listOf("-Xskip-prerelease-check")
     }
 
     named<ProcessResources>("processResources") {
@@ -146,7 +146,7 @@ tasks {
         failOnWarning = true
     }
 
-    named<Upload>("install") {
+    named("install") {
         dependsOn(named("validateTaskProperties"))
     }
 
@@ -159,6 +159,8 @@ tasks {
 projectTest {
     executable = "${rootProject.extra["JDK_18"]!!}/bin/java"
     dependsOn(tasks.named("validateTaskProperties"))
+
+    workingDir = rootDir
 }
 
 pluginBundle {
@@ -196,6 +198,11 @@ pluginBundle {
         display = "Kotlin Android Extensions plugin"
     )
     create(
+        name = "kotlinParcelizePlugin",
+        id = "org.jetbrains.kotlin.plugin.parcelize",
+        display = "Kotlin Parcelize plugin"
+    )
+    create(
         name = "kotlinKaptPlugin",
         id = "org.jetbrains.kotlin.kapt",
         display = "Kotlin Kapt plugin"
@@ -211,3 +218,5 @@ pluginBundle {
         display = "Kotlin Native plugin for CocoaPods integration"
     )
 }
+
+publishPluginMarkers()

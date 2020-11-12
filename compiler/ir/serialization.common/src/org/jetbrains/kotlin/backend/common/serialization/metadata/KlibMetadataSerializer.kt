@@ -1,26 +1,25 @@
 /*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
 package org.jetbrains.kotlin.backend.common.serialization.metadata
 
-import org.jetbrains.kotlin.backend.common.serialization.DescriptorTable
-import org.jetbrains.kotlin.backend.common.serialization.newDescriptorUniqId
+import com.intellij.openapi.project.Project
+import org.jetbrains.kotlin.backend.common.serialization.isExpectMember
+import org.jetbrains.kotlin.backend.common.serialization.isSerializableExpectClass
 import org.jetbrains.kotlin.config.AnalysisFlags
 import org.jetbrains.kotlin.config.LanguageVersionSettings
 import org.jetbrains.kotlin.descriptors.*
+import org.jetbrains.kotlin.descriptors.impl.ModuleDescriptorImpl
 import org.jetbrains.kotlin.incremental.components.NoLookupLocation
-import org.jetbrains.kotlin.ir.backend.js.lower.serialization.metadata.KlibMetadataFileRegistry
-import org.jetbrains.kotlin.ir.backend.js.lower.serialization.metadata.KotlinPsiFileMetadata
 import org.jetbrains.kotlin.library.metadata.KlibMetadataProtoBuf
 import org.jetbrains.kotlin.metadata.ProtoBuf
 import org.jetbrains.kotlin.metadata.deserialization.BinaryVersion
+import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
-import org.jetbrains.kotlin.resolve.BindingContext
-import org.jetbrains.kotlin.resolve.descriptorUtil.filterOutSourceAnnotations
+import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameSafe
 import org.jetbrains.kotlin.resolve.scopes.DescriptorKindFilter
-import org.jetbrains.kotlin.serialization.AnnotationSerializer
 import org.jetbrains.kotlin.serialization.DescriptorSerializer
 import org.jetbrains.kotlin.serialization.StringTableImpl
 import org.jetbrains.kotlin.serialization.deserialization.descriptors.DeserializedClassDescriptor
@@ -33,10 +32,11 @@ internal fun <T, R> Iterable<T>.maybeChunked(size: Int?, transform: (List<T>) ->
 abstract class KlibMetadataSerializer(
     val languageVersionSettings: LanguageVersionSettings,
     val metadataVersion: BinaryVersion,
-    val descriptorTable: DescriptorTable
+    val project: Project?,
+    val skipExpects: Boolean = false,
+    val includeOnlyModuleContent: Boolean = false,
+    private val allowErrorTypes: Boolean
 ) {
-
-    val fileRegistry = KlibMetadataFileRegistry()
 
     lateinit var serializerContext: SerializerContext
 
@@ -46,19 +46,13 @@ abstract class KlibMetadataSerializer(
         var classSerializer: DescriptorSerializer = topSerializer
     )
 
-    fun declarationTableHandler(declarationDescriptor: DeclarationDescriptor): KlibMetadataProtoBuf.DescriptorUniqId {
-        val index = descriptorTable.get(declarationDescriptor) ?: error("No descriptor ID found for $declarationDescriptor")
-        return index.let { newDescriptorUniqId(it) }
-    }
-
     protected fun createNewContext(): SerializerContext {
 
         val extension = KlibMetadataSerializerExtension(
             languageVersionSettings,
             metadataVersion,
-            ::declarationTableHandler,
-            {descriptor -> fileRegistry.getFileId(descriptor) } ,
-            KlibMetadataStringTable()
+            KlibMetadataStringTable(),
+            allowErrorTypes
         )
         return SerializerContext(
             extension,
@@ -76,15 +70,10 @@ abstract class KlibMetadataSerializer(
         packageProto: ProtoBuf.Package,
         classesProto: List<Pair<ProtoBuf.Class, Int>>,
         fqName: FqName,
-        isEmpty: Boolean,
-        bindingContext: BindingContext
+        isEmpty: Boolean
     ): ProtoBuf.PackageFragment {
 
         val (stringTableProto, nameTableProto) = serializerExtension.stringTable.buildProto()
-
-        // TODO: we place files table to each and every fragment.
-        // Need to refactor it out sonehow.
-        val files = serializeFiles(fileRegistry, bindingContext, AnnotationSerializer(serializerExtension.stringTable))
 
         return ProtoBuf.PackageFragment.newBuilder()
             .setPackage(packageProto)
@@ -95,7 +84,6 @@ abstract class KlibMetadataSerializer(
                 classesProto.forEach {
                     packageFragment.addExtension(KlibMetadataProtoBuf.className, it.second )
                 }
-                packageFragment.setExtension(KlibMetadataProtoBuf.packageFragmentFiles, files)
                 packageFragment.setExtension(KlibMetadataProtoBuf.isEmpty, isEmpty)
                 packageFragment.setExtension(KlibMetadataProtoBuf.fqName, fqName.asString())
             }
@@ -107,28 +95,48 @@ abstract class KlibMetadataSerializer(
         with(serializerContext) {
             val previousSerializer = classSerializer
 
-            classSerializer = DescriptorSerializer.create(classDescriptor, serializerExtension, classSerializer)
+            classSerializer = DescriptorSerializer.create(classDescriptor, serializerExtension, classSerializer, project)
             val classProto = classSerializer.classProto(classDescriptor).build() ?: error("Class not serialized: $classDescriptor")
             //builder.addClass(classProto)
 
             val index = classSerializer.stringTable.getFqNameIndex(classDescriptor)
             //builder.addExtension(KlibMetadataProtoBuf.className, index)
 
-            val classes = serializeClasses(packageName/*, builder*/,
+            val classes = serializeClasses(
+                packageName/*, builder*/,
                 classDescriptor.unsubstitutedInnerClassesScope
-                    .getContributedDescriptors(DescriptorKindFilter.CLASSIFIERS))
+                    .getContributedDescriptors(DescriptorKindFilter.CLASSIFIERS)
+            )
 
             classSerializer = previousSerializer
             return classes + Pair(classProto, index)
         }
     }
 
-    protected fun serializeClasses(packageName: FqName,
+    // TODO: we filter out expects with present actuals.
+    // This is done because deserialized member scope doesn't give us actuals
+    // when it has a choice
+    private fun List<DeclarationDescriptor>.filterOutExpectsWithActuals(): List<DeclarationDescriptor> {
+        val actualClassIds = this.filter{ !it.isExpectMember }.map { ClassId.topLevel(it.fqNameSafe) }
+        return this.filterNot {
+            // TODO: this only filters classes for now.
+            // Need to do the same for functions etc
+            (it is ClassDescriptor) && it.isExpect() && ClassId.topLevel(it.fqNameSafe) in actualClassIds
+        }
+    }
+
+    protected fun List<DeclarationDescriptor>.filterOutExpects(): List<DeclarationDescriptor> =
+        if (skipExpects)
+            this.filterNot { it.isExpectMember && !it.isSerializableExpectClass }
+        else
+            this.filterOutExpectsWithActuals()
+
+    private fun serializeClasses(packageName: FqName,
                                  //builder: ProtoBuf.PackageFragment.Builder,
                                  descriptors: Collection<DeclarationDescriptor>): List<Pair<ProtoBuf.Class, Int>> {
 
         return descriptors.filterIsInstance<ClassDescriptor>().flatMap {
-            serializeClass(packageName, /*builder, */it)
+            serializeClass(packageName, it)
         }
     }
 
@@ -141,10 +149,12 @@ abstract class KlibMetadataSerializer(
 
     protected fun serializeDescriptors(
         fqName: FqName,
-        classifierDescriptors: List<DeclarationDescriptor>,
-        topLevelDescriptors: List<DeclarationDescriptor>,
-        bindingContext: BindingContext
+        allClassifierDescriptors: List<DeclarationDescriptor>,
+        allTopLevelDescriptors: List<DeclarationDescriptor>
     ): List<ProtoBuf.PackageFragment> {
+
+        val classifierDescriptors = allClassifierDescriptors.filterOutExpects()
+        val topLevelDescriptors = allTopLevelDescriptors.filterOutExpects()
 
         if (TOP_LEVEL_CLASS_DECLARATION_COUNT_PER_FILE == null &&
             TOP_LEVEL_DECLARATION_COUNT_PER_FILE == null) {
@@ -163,8 +173,7 @@ abstract class KlibMetadataSerializer(
                         packageProto,
                         serializeClasses(fqName, classifierDescriptors),
                         fqName,
-                        topLevelDescriptors.isEmpty() && classifierDescriptors.isEmpty(),
-                        bindingContext
+                        topLevelDescriptors.isEmpty() && classifierDescriptors.isEmpty()
                     )
                 }
             )
@@ -190,8 +199,7 @@ abstract class KlibMetadataSerializer(
                     packageProto,
                     classesProto,
                     fqName,
-                    descriptors.isEmpty(),
-                    bindingContext
+                    descriptors.isEmpty()
                 )
             }
         }
@@ -202,8 +210,7 @@ abstract class KlibMetadataSerializer(
                     buildPackageProto(fqName, descriptors),
                     emptyList(),
                     fqName,
-                    descriptors.isEmpty(),
-                    bindingContext
+                    descriptors.isEmpty()
                 )
             }
         }
@@ -214,8 +221,7 @@ abstract class KlibMetadataSerializer(
                     emptyPackageProto(),
                     emptyList(),
                     fqName,
-                    true,
-                    bindingContext
+                    true
                 )
             }
         }
@@ -223,41 +229,19 @@ abstract class KlibMetadataSerializer(
         return result
     }
 
-    private fun serializeFiles(
-        fileRegistry: KlibMetadataFileRegistry,
-        bindingContext: BindingContext,
-        serializer: AnnotationSerializer
-    ): KlibMetadataProtoBuf.Files {
-        val filesProto = KlibMetadataProtoBuf.Files.newBuilder()
-        for ((file, id) in fileRegistry.fileIds.entries.sortedBy { it.value }) {
-            val fileProto = KlibMetadataProtoBuf.File.newBuilder()
-            if (id != filesProto.fileCount) {
-                fileProto.id = id
-            }
-            val annotations = when (file) {
-                is KotlinPsiFileMetadata -> file.ktFile.annotationEntries.map { bindingContext[BindingContext.ANNOTATION, it]!! }
-                //is KotlinDeserializedFileMetadata -> file.packageFragment.fileMap[file.fileId]!!.annotations
-                else -> TODO("support other file types")
-            }
-            for (annotation in annotations.filterOutSourceAnnotations()) {
-                fileProto.addAnnotation(serializer.serializeAnnotation(annotation))
-            }
-            val name = when (file) {
-                is KotlinPsiFileMetadata -> file.ktFile.getName()
-                else -> TODO("support other file types")
-            }
-            fileProto.name = name
-            filesProto.addFile(fileProto)
-        }
-        return filesProto.build()
-    }
-
     protected fun getPackagesFqNames(module: ModuleDescriptor): Set<FqName> {
         val result = mutableSetOf<FqName>()
 
+        fun getSubPackagesOfModule(fqName: FqName) =
+            if (includeOnlyModuleContent) {
+                module.packageFragmentProviderForModuleContentWithoutDependencies.getSubPackagesOf(fqName) { true }
+            } else {
+                module.getSubPackagesOf(fqName) { true }
+            }
+
         fun getSubPackages(fqName: FqName) {
             result.add(fqName)
-            module.getSubPackagesOf(fqName) { true }.forEach { getSubPackages(it) }
+            getSubPackagesOfModule(fqName).forEach { getSubPackages(it) }
         }
 
         getSubPackages(FqName.ROOT)
@@ -267,7 +251,7 @@ abstract class KlibMetadataSerializer(
     fun serializeHeader(
         moduleDescriptor: ModuleDescriptor,
         fragmentNames: List<String>,
-        emptyPackages: List<String> = emptyList()
+        emptyPackages: List<String>
     ): KlibMetadataProtoBuf.Header {
         val header = KlibMetadataProtoBuf.Header.newBuilder()
 
@@ -296,6 +280,7 @@ abstract class KlibMetadataSerializer(
         emptyPackages.forEach {
             header.addEmptyPackage(it)
         }
+
         return header.build()
     }
 
@@ -312,3 +297,7 @@ fun DeclarationDescriptor.extractFileId(): Int? = when (this) {
     is DeserializedPropertyDescriptor -> proto.getExtension(KlibMetadataProtoBuf.propertyFile)
     else -> null
 }
+
+internal val ModuleDescriptor.packageFragmentProviderForModuleContentWithoutDependencies: PackageFragmentProvider
+    get() = (this as? ModuleDescriptorImpl)?.packageFragmentProviderForModuleContentWithoutDependencies
+        ?: error("Can't get a module content package fragments, it's not a ${ModuleDescriptorImpl::class.simpleName}.")

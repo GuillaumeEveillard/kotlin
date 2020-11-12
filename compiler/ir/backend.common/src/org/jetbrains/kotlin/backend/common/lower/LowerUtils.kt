@@ -17,11 +17,11 @@
 package org.jetbrains.kotlin.backend.common.lower
 
 import org.jetbrains.kotlin.backend.common.BackendContext
-import org.jetbrains.kotlin.backend.common.CommonBackendContext
 import org.jetbrains.kotlin.descriptors.*
 import org.jetbrains.kotlin.descriptors.impl.ValueParameterDescriptorImpl
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.IrStatement
+import org.jetbrains.kotlin.ir.ObsoleteDescriptorBasedAPI
 import org.jetbrains.kotlin.ir.UNDEFINED_OFFSET
 import org.jetbrains.kotlin.ir.builders.*
 import org.jetbrains.kotlin.ir.declarations.*
@@ -32,8 +32,6 @@ import org.jetbrains.kotlin.ir.symbols.IrSymbol
 import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.classifierOrFail
-import org.jetbrains.kotlin.ir.util.defaultType
-import org.jetbrains.kotlin.ir.visitors.IrElementTransformer
 import org.jetbrains.kotlin.ir.visitors.IrElementTransformerVoid
 import org.jetbrains.kotlin.ir.visitors.IrElementVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
@@ -42,11 +40,11 @@ import org.jetbrains.kotlin.name.Name
 class IrLoweringContext(backendContext: BackendContext) : IrGeneratorContextBase(backendContext.irBuiltIns)
 
 class DeclarationIrBuilder(
-    backendContext: BackendContext,
+    generatorContext: IrGeneratorContext,
     symbol: IrSymbol,
     startOffset: Int = UNDEFINED_OFFSET, endOffset: Int = UNDEFINED_OFFSET
 ) : IrBuilderWithScope(
-    IrLoweringContext(backendContext),
+    generatorContext,
     Scope(symbol),
     startOffset,
     endOffset
@@ -59,6 +57,13 @@ abstract class AbstractVariableRemapper : IrElementTransformerVoid() {
         remapVariable(expression.symbol.owner)?.let {
             IrGetValueImpl(expression.startOffset, expression.endOffset, it.type, it.symbol, expression.origin)
         } ?: expression
+
+    override fun visitSetValue(expression: IrSetValue): IrExpression {
+        expression.transformChildrenVoid()
+        return remapVariable(expression.symbol.owner)?.let {
+            IrSetValueImpl(expression.startOffset, expression.endOffset, it.type, it.symbol, expression.value, expression.origin)
+        } ?: expression
+    }
 }
 
 open class VariableRemapper(val mapping: Map<IrValueParameter, IrValueDeclaration>) : AbstractVariableRemapper() {
@@ -66,17 +71,12 @@ open class VariableRemapper(val mapping: Map<IrValueParameter, IrValueDeclaratio
         mapping[value]
 }
 
-class VariableRemapperDesc(val mapping: Map<ValueDescriptor, IrValueParameter>) : AbstractVariableRemapper() {
-    override fun remapVariable(value: IrValueDeclaration): IrValueDeclaration? =
-        mapping[value.descriptor]
-}
-
 fun BackendContext.createIrBuilder(
     symbol: IrSymbol,
     startOffset: Int = UNDEFINED_OFFSET,
     endOffset: Int = UNDEFINED_OFFSET
 ) =
-    DeclarationIrBuilder(this, symbol, startOffset, endOffset)
+    DeclarationIrBuilder(IrLoweringContext(this), symbol, startOffset, endOffset)
 
 
 fun <T : IrBuilder> T.at(element: IrElement) = this.at(element.startOffset, element.endOffset)
@@ -112,11 +112,8 @@ fun IrBuilderWithScope.irNot(arg: IrExpression) =
 fun IrBuilderWithScope.irThrow(arg: IrExpression) =
     IrThrowImpl(startOffset, endOffset, context.irBuiltIns.nothingType, arg)
 
-fun IrBuilderWithScope.irCatch(catchParameter: IrVariable) =
-    IrCatchImpl(
-        startOffset, endOffset,
-        catchParameter
-    )
+fun IrBuilderWithScope.irCatch(catchParameter: IrVariable, result: IrExpression): IrCatch =
+    IrCatchImpl(startOffset, endOffset, catchParameter, result)
 
 fun IrBuilderWithScope.irImplicitCoercionToUnit(arg: IrExpression) =
     IrTypeOperatorCallImpl(
@@ -159,6 +156,18 @@ open class IrBuildingTransformer(private val context: BackendContext) : IrElemen
             return super.visitAnonymousInitializer(declaration)
         }
     }
+
+    override fun visitEnumEntry(declaration: IrEnumEntry): IrStatement {
+        withBuilder(declaration.symbol) {
+            return super.visitEnumEntry(declaration)
+        }
+    }
+
+    override fun visitScript(declaration: IrScript): IrStatement {
+        withBuilder(declaration.symbol) {
+            return super.visitScript(declaration)
+        }
+    }
 }
 
 fun IrConstructor.callsSuper(irBuiltIns: IrBuiltIns): Boolean {
@@ -183,12 +192,12 @@ fun IrConstructor.callsSuper(irBuiltIns: IrBuiltIns): Boolean {
             val delegatingClass = expression.symbol.owner.parent as IrClass
             // TODO: figure out why Lazy IR multiplies Declarations for descriptors and fix it
             // It happens because of IrBuiltIns whose IrDeclarations are different for runtime and test
-            if (delegatingClass.descriptor == superClass.classifierOrFail.descriptor)
+            if (delegatingClass.symbol == superClass.classifierOrFail)
                 callsSuper = true
-            else if (delegatingClass.descriptor != constructedClass.descriptor)
+            else if (delegatingClass.symbol != constructedClass.symbol)
                 throw AssertionError(
                     "Expected either call to another constructor of the class being constructed or" +
-                            " call to super class constructor. But was: $delegatingClass"
+                            " call to super class constructor. But was: $delegatingClass with '${delegatingClass.name}' name"
                 )
         }
     })
@@ -212,31 +221,4 @@ fun ParameterDescriptor.copyAsValueParameter(newOwner: CallableDescriptor, index
         source = source
     )
     else -> throw Error("Unexpected parameter descriptor: $this")
-}
-
-fun IrBody.replaceThisByStaticReference(
-    context: CommonBackendContext,
-    irClass: IrClass,
-    oldThisReceiverParameter: IrValueParameter
-): IrBody =
-    transform(ReplaceThisByStaticReference(context, irClass, oldThisReceiverParameter), null)
-
-private class ReplaceThisByStaticReference(
-    val context: CommonBackendContext,
-    val irClass: IrClass,
-    val oldThisReceiverParameter: IrValueParameter
-) : IrElementTransformer<Nothing?> {
-    override fun visitGetValue(expression: IrGetValue, data: Nothing?): IrExpression {
-        val irGetValue = expression
-        if (irGetValue.symbol == oldThisReceiverParameter.symbol) {
-            val instanceField = context.declarationFactory.getFieldForObjectInstance(irClass)
-            return IrGetFieldImpl(
-                expression.startOffset,
-                expression.endOffset,
-                instanceField.symbol,
-                irClass.defaultType
-            )
-        }
-        return super.visitGetValue(irGetValue, data)
-    }
 }

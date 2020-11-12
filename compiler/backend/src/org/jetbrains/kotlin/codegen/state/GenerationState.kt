@@ -21,7 +21,6 @@ import org.jetbrains.kotlin.codegen.optimization.OptimizationClassBuilderFactory
 import org.jetbrains.kotlin.codegen.serialization.JvmSerializationBindings
 import org.jetbrains.kotlin.config.*
 import org.jetbrains.kotlin.descriptors.ClassDescriptor
-import org.jetbrains.kotlin.descriptors.FunctionDescriptor
 import org.jetbrains.kotlin.descriptors.ModuleDescriptor
 import org.jetbrains.kotlin.descriptors.ScriptDescriptor
 import org.jetbrains.kotlin.diagnostics.Diagnostic
@@ -40,21 +39,22 @@ import org.jetbrains.kotlin.resolve.*
 import org.jetbrains.kotlin.resolve.deprecation.CoroutineCompatibilitySupport
 import org.jetbrains.kotlin.resolve.deprecation.DeprecationResolver
 import org.jetbrains.kotlin.resolve.diagnostics.Diagnostics
+import org.jetbrains.kotlin.resolve.diagnostics.PrecomputedSuppressCache
 import org.jetbrains.kotlin.resolve.jvm.JvmClassName
 import org.jetbrains.kotlin.resolve.jvm.diagnostics.JvmDeclarationOrigin
 import org.jetbrains.kotlin.resolve.jvm.diagnostics.JvmDeclarationOriginKind.*
 import org.jetbrains.kotlin.serialization.deserialization.DeserializationConfiguration
 import org.jetbrains.kotlin.storage.LockBasedStorageManager
 import org.jetbrains.kotlin.types.KotlinType
+import org.jetbrains.kotlin.types.TypeApproximator
 import org.jetbrains.org.objectweb.asm.Type
-import org.jetbrains.org.objectweb.asm.commons.Method
 import java.io.File
 
 class GenerationState private constructor(
     val project: Project,
     builderFactory: ClassBuilderFactory,
     val module: ModuleDescriptor,
-    bindingContext: BindingContext,
+    val originalFrontendBindingContext: BindingContext,
     val files: List<KtFile>,
     val configuration: CompilerConfiguration,
     val generateDeclaredClassFilter: GenerateClassFilter,
@@ -64,7 +64,8 @@ class GenerationState private constructor(
     val outDirectory: File?,
     private val onIndependentPartCompilationEnd: GenerationStateEventCallback,
     wantsDiagnostics: Boolean,
-    val jvmBackendClassResolver: JvmBackendClassResolver
+    val jvmBackendClassResolver: JvmBackendClassResolver,
+    val isIrBackend: Boolean
 ) {
 
     class Builder(
@@ -111,12 +112,16 @@ class GenerationState private constructor(
         fun jvmBackendClassResolver(v: JvmBackendClassResolver) =
             apply { jvmBackendClassResolver = v }
 
+        var isIrBackend: Boolean = configuration.getBoolean(JVMConfigurationKeys.IR)
+        fun isIrBackend(v: Boolean) =
+            apply { isIrBackend = v }
+
         fun build() =
             GenerationState(
                 project, builderFactory, module, bindingContext, files, configuration,
                 generateDeclaredClassFilter, codegenFactory, targetId,
                 moduleName, outDirectory, onIndependentPartCompilationEnd, wantsDiagnostics,
-                jvmBackendClassResolver
+                jvmBackendClassResolver, isIrBackend
             )
     }
 
@@ -174,31 +179,38 @@ class GenerationState private constructor(
     }
 
     val extraJvmDiagnosticsTrace: BindingTrace =
-        DelegatingBindingTrace(bindingContext, "For extra diagnostics in ${this::class.java}", false)
+        DelegatingBindingTrace(
+            originalFrontendBindingContext, "For extra diagnostics in ${this::class.java}", false,
+            customSuppressCache = if (isIrBackend) PrecomputedSuppressCache(originalFrontendBindingContext, files) else null,
+        )
+
     private val interceptedBuilderFactory: ClassBuilderFactory
     private var used = false
 
     val diagnostics: DiagnosticSink get() = extraJvmDiagnosticsTrace
     val collectedExtraJvmDiagnostics: Diagnostics = LazyJvmDiagnostics {
-        duplicateSignatureFactory.reportDiagnostics()
+        duplicateSignatureFactory?.reportDiagnostics()
         extraJvmDiagnosticsTrace.bindingContext.diagnostics
     }
 
     val languageVersionSettings = configuration.languageVersionSettings
 
     val target = configuration.get(JVMConfigurationKeys.JVM_TARGET) ?: JvmTarget.DEFAULT
+    val runtimeStringConcat =
+        if (target.bytecodeVersion >= JvmTarget.JVM_9.bytecodeVersion)
+            configuration.get(JVMConfigurationKeys.STRING_CONCAT) ?: JvmStringConcat.INLINE
+        else JvmStringConcat.INLINE
 
     val moduleName: String = moduleName ?: JvmCodegenUtil.getModuleName(module)
     val classBuilderMode: ClassBuilderMode = builderFactory.classBuilderMode
     val bindingTrace: BindingTrace = DelegatingBindingTrace(
-        bindingContext, "trace in GenerationState",
+        originalFrontendBindingContext, "trace in GenerationState",
         filter = if (wantsDiagnostics) BindingTraceFilter.ACCEPT_ALL else BindingTraceFilter.NO_DIAGNOSTICS
     )
     val bindingContext: BindingContext = bindingTrace.bindingContext
-    val mainFunctionDetector = MainFunctionDetector(bindingContext, languageVersionSettings)
-    val isIrBackend = configuration.get(JVMConfigurationKeys.IR) ?: false
+    val mainFunctionDetector = MainFunctionDetector(originalFrontendBindingContext, languageVersionSettings)
     val typeMapper: KotlinTypeMapper = KotlinTypeMapper(
-        this.bindingContext,
+        bindingContext,
         classBuilderMode,
         this.moduleName,
         languageVersionSettings,
@@ -206,18 +218,26 @@ class GenerationState private constructor(
         target,
         isIrBackend
     )
+    val canReplaceStdlibRuntimeApiBehavior = languageVersionSettings.apiVersion <= ApiVersion.parse(KotlinVersion.CURRENT.toString())!!
     val intrinsics: IntrinsicMethods = run {
         val shouldUseConsistentEquals = languageVersionSettings.supportsFeature(LanguageFeature.ThrowNpeOnExplicitEqualsForBoxedNull) &&
                 !configuration.getBoolean(JVMConfigurationKeys.NO_EXCEPTION_ON_EXPLICIT_EQUALS_FOR_BOXED_NULL)
-        val canReplaceStdlibRuntimeApiBehavior = languageVersionSettings.apiVersion <= ApiVersion.parse(KotlinVersion.CURRENT.toString())!!
         IntrinsicMethods(target, canReplaceStdlibRuntimeApiBehavior, shouldUseConsistentEquals)
     }
+    val generateOptimizedCallableReferenceSuperClasses =
+        languageVersionSettings.apiVersion >= ApiVersion.KOTLIN_1_4 &&
+                !configuration.getBoolean(JVMConfigurationKeys.NO_OPTIMIZED_CALLABLE_REFERENCES)
+    val useKotlinNothingValueException =
+        languageVersionSettings.apiVersion >= ApiVersion.KOTLIN_1_4 &&
+                !configuration.getBoolean(JVMConfigurationKeys.NO_KOTLIN_NOTHING_VALUE_EXCEPTION)
     val samWrapperClasses: SamWrapperClasses = SamWrapperClasses(this)
     val globalInlineContext: GlobalInlineContext = GlobalInlineContext(diagnostics)
     val mappingsClassesForWhenByEnum: MappingsClassesForWhenByEnum = MappingsClassesForWhenByEnum(this)
-    val jvmRuntimeTypes: JvmRuntimeTypes = JvmRuntimeTypes(module, configuration.languageVersionSettings)
+    val jvmRuntimeTypes: JvmRuntimeTypes = JvmRuntimeTypes(
+        module, configuration.languageVersionSettings, generateOptimizedCallableReferenceSuperClasses
+    )
     val factory: ClassFileFactory
-    private lateinit var duplicateSignatureFactory: BuilderFactoryForDuplicateSignatureDiagnostics
+    private var duplicateSignatureFactory: BuilderFactoryForDuplicateSignatureDiagnostics? = null
 
     val scriptSpecific = ForScript()
 
@@ -227,6 +247,7 @@ class GenerationState private constructor(
         var earlierScriptsForReplInterpreter: List<ScriptDescriptor>? = null
         // and the rest is an output from the codegen
         var resultFieldName: String? = null
+        var resultTypeString: String? = null
         var resultType: KotlinType? = null
     }
 
@@ -238,6 +259,11 @@ class GenerationState private constructor(
     val assertionsMode: JVMAssertionsMode = configuration.get(JVMConfigurationKeys.ASSERTIONS_MODE, JVMAssertionsMode.DEFAULT)
     val isInlineDisabled: Boolean = configuration.getBoolean(CommonConfigurationKeys.DISABLE_INLINE)
     val useTypeTableInSerializer: Boolean = configuration.getBoolean(JVMConfigurationKeys.USE_TYPE_TABLE)
+    val unifiedNullChecks: Boolean =
+        languageVersionSettings.apiVersion >= ApiVersion.KOTLIN_1_4 &&
+                !configuration.getBoolean(JVMConfigurationKeys.NO_UNIFIED_NULL_CHECKS)
+    val functionsWithInlineClassReturnTypesMangled: Boolean =
+        languageVersionSettings.supportsFeature(LanguageFeature.MangleClassMembersReturningInlineClasses)
 
     val rootContext: CodegenContext<*> = RootContext(this)
 
@@ -259,11 +285,21 @@ class GenerationState private constructor(
 
     val disableOptimization = configuration.get(JVMConfigurationKeys.DISABLE_OPTIMIZATION, false)
 
-    val metadataVersion = configuration.get(CommonConfigurationKeys.METADATA_VERSION) ?: JvmMetadataVersion.INSTANCE
+    val metadataVersion =
+        configuration.get(CommonConfigurationKeys.METADATA_VERSION)
+            ?: if (languageVersionSettings.languageVersion >= LanguageVersion.LATEST_STABLE) JvmMetadataVersion.INSTANCE
+            else JvmMetadataVersion(1, 1, 18)
+
+    val isIrWithStableAbi = configuration.getBoolean(JVMConfigurationKeys.IS_IR_WITH_STABLE_ABI)
 
     val globalSerializationBindings = JvmSerializationBindings()
-    lateinit var irBasedMapAsmMethod: (FunctionDescriptor) -> Method
     var mapInlineClass: (ClassDescriptor) -> Type = { descriptor -> typeMapper.mapType(descriptor.defaultType) }
+
+    val typeApproximator: TypeApproximator? =
+        if (languageVersionSettings.supportsFeature(LanguageFeature.NewInference))
+            TypeApproximator(module.builtIns)
+        else
+            null
 
     init {
         this.interceptedBuilderFactory = builderFactory
@@ -275,11 +311,15 @@ class GenerationState private constructor(
                         it
                 },
                 {
-                    BuilderFactoryForDuplicateSignatureDiagnostics(
-                        it, this.bindingContext, diagnostics, this.moduleName, this.languageVersionSettings,
-                        shouldGenerate = { !shouldOnlyCollectSignatures(it) },
-                        mapAsmMethod = if (isIrBackend) { descriptor: FunctionDescriptor -> irBasedMapAsmMethod(descriptor) } else null
-                    ).apply { duplicateSignatureFactory = this }
+                    // In IR backend, we have more precise information about classes and methods we are going to generate,
+                    // and report signature conflict errors in JvmSignatureClashTracker.
+                    if (isIrBackend)
+                        it
+                    else
+                        BuilderFactoryForDuplicateSignatureDiagnostics(
+                            it, bindingContext, diagnostics, this.moduleName, languageVersionSettings,
+                            shouldGenerate = { origin -> !shouldOnlyCollectSignatures(origin) },
+                        ).apply { duplicateSignatureFactory = this }
                 },
                 { BuilderFactoryForDuplicateClassNameDiagnostics(it, diagnostics) },
                 {
@@ -288,7 +328,7 @@ class GenerationState private constructor(
                 }
             )
             .wrapWith(ClassBuilderInterceptorExtension.getInstances(project)) { classBuilderFactory, extension ->
-                extension.interceptClassBuilderFactory(classBuilderFactory, bindingContext, diagnostics)
+                extension.interceptClassBuilderFactory(classBuilderFactory, originalFrontendBindingContext, diagnostics)
             }
 
         this.factory = ClassFileFactory(this, interceptedBuilderFactory)

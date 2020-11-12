@@ -16,6 +16,7 @@
 
 package org.jetbrains.kotlin.renderer
 
+import org.jetbrains.kotlin.builtins.KotlinBuiltIns
 import org.jetbrains.kotlin.descriptors.ValueParameterDescriptor
 import org.jetbrains.kotlin.descriptors.annotations.AnnotationDescriptor
 import org.jetbrains.kotlin.name.FqName
@@ -127,4 +128,6 @@ internal class DescriptorRendererOptionsImpl : DescriptorRendererOptions {
     override var presentableUnresolvedTypes: Boolean by property(false)
 
     override var boldOnlyForNamesInHtml: Boolean by property(false)
+
+    override var informativeErrorType: Boolean by property(true)
 }

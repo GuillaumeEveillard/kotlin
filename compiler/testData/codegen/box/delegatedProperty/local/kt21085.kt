@@ -1,4 +1,3 @@
-
 class Delegate(val value: String) {
     operator fun getValue(thisRef: Any?, kProperty: Any?) = value
 }

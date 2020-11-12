@@ -6,8 +6,8 @@
 package org.jetbrains.kotlin.nj2k.postProcessing
 
 import com.intellij.openapi.diagnostic.Logger
-import com.intellij.openapi.editor.RangeMarker
 import com.intellij.openapi.progress.ProcessCanceledException
+import com.intellij.psi.impl.source.PostprocessReformattingAspect
 import org.jetbrains.kotlin.diagnostics.Errors
 import org.jetbrains.kotlin.idea.caches.resolve.resolveImportReference
 import org.jetbrains.kotlin.idea.formatter.commitAndUnblockDocument
@@ -22,12 +22,16 @@ import org.jetbrains.kotlin.idea.intentions.branchedTransformations.isTrivialSta
 import org.jetbrains.kotlin.idea.quickfix.*
 import org.jetbrains.kotlin.idea.util.ImportInsertHelper
 import org.jetbrains.kotlin.j2k.ConverterContext
+import org.jetbrains.kotlin.j2k.JKPostProcessingTarget
 import org.jetbrains.kotlin.j2k.PostProcessor
+import org.jetbrains.kotlin.j2k.files
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.name.FqName
+import org.jetbrains.kotlin.nj2k.KotlinNJ2KServicesBundle
 import org.jetbrains.kotlin.nj2k.NewJ2kConverterContext
 import org.jetbrains.kotlin.nj2k.postProcessing.processings.*
 import org.jetbrains.kotlin.psi.*
+import org.jetbrains.kotlin.psi.psiUtil.parents
 
 class NewJ2kPostProcessor : PostProcessor {
     @Suppress("PrivatePropertyName")
@@ -42,25 +46,40 @@ class NewJ2kPostProcessor : PostProcessor {
 
     override val phasesCount = processings.size
 
+
     override fun doAdditionalProcessing(
-        file: KtFile,
+        target: JKPostProcessingTarget,
         converterContext: ConverterContext?,
-        rangeMarker: RangeMarker?,
         onPhaseChanged: ((Int, String) -> Unit)?
     ) {
+        if (converterContext !is NewJ2kConverterContext) error("Invalid converter context for new J2K")
         for ((i, group) in processings.withIndex()) {
-            onPhaseChanged?.invoke(i + 1, group.description)
+            onPhaseChanged?.invoke(i, group.description)
             for (processing in group.processings) {
                 try {
-                    processing.runProcessing(file, rangeMarker, converterContext as NewJ2kConverterContext)
+                    processing.runProcessingConsideringOptions(target, converterContext)
                 } catch (e: ProcessCanceledException) {
                     throw e
                 } catch (t: Throwable) {
                     LOG.error(t)
                 } finally {
-                    commitFile(file)
+                    target.files().forEach(::commitFile)
                 }
             }
+        }
+    }
+
+    private fun GeneralPostProcessing.runProcessingConsideringOptions(
+        target: JKPostProcessingTarget,
+        converterContext: NewJ2kConverterContext
+    ) {
+
+        if (options.disablePostprocessingFormatting) {
+            PostprocessReformattingAspect.getInstance(converterContext.project).disablePostprocessFormattingInside {
+                runProcessing(target, converterContext)
+            }
+        } else {
+            runProcessing(target, converterContext)
         }
     }
 
@@ -125,6 +144,16 @@ private val errorsFixingDiagnosticBasedPostProcessingGroup =
             RemoveModifierFix.createRemoveModifierFactory(),
             Errors.WRONG_MODIFIER_TARGET
         ),
+        diagnosticBasedProcessing(
+            ChangeVisibilityOnExposureFactory,
+            Errors.EXPOSED_FUNCTION_RETURN_TYPE,
+            Errors.EXPOSED_PARAMETER_TYPE,
+            Errors.EXPOSED_PROPERTY_TYPE,
+            Errors.EXPOSED_PROPERTY_TYPE_IN_CONSTRUCTOR,
+            Errors.EXPOSED_RECEIVER_TYPE,
+            Errors.EXPOSED_SUPER_CLASS,
+            Errors.EXPOSED_SUPER_INTERFACE
+        ),
         fixValToVarDiagnosticBasedProcessing,
         fixTypeMismatchDiagnosticBasedProcessing
     )
@@ -148,6 +177,7 @@ private val removeRedundantElementsProcessingGroup =
             RemoveExplicitTypeArgumentsProcessing(),
             RemoveJavaStreamsCollectCallTypeArgumentsProcessing(),
             ExplicitThisInspectionBasedProcessing(),
+            RemoveOpenModifierOnTopLevelDeclarationsProcessing(),
             intentionBasedProcessing(RemoveEmptyClassBodyIntention())
         )
     )
@@ -193,8 +223,8 @@ private val inspectionLikePostProcessingGroup =
                 it
             ) as KtReturnExpression).returnedExpression.isTrivialStatementBody()
         },
-        inspectionBasedProcessing(IfThenToSafeAccessInspection(), writeActionNeeded = false),
-        inspectionBasedProcessing(IfThenToElvisInspection(highlightStatement = true), writeActionNeeded = false),
+        inspectionBasedProcessing(IfThenToSafeAccessInspection(inlineWithPrompt = false), writeActionNeeded = false),
+        inspectionBasedProcessing(IfThenToElvisInspection(highlightStatement = true, inlineWithPrompt = false), writeActionNeeded = false),
         inspectionBasedProcessing(SimplifyNegatedBinaryExpressionInspection()),
         inspectionBasedProcessing(ReplaceGetOrSetInspection()),
         intentionBasedProcessing(ObjectLiteralToLambdaIntention(), writeActionNeeded = true),
@@ -208,7 +238,16 @@ private val inspectionLikePostProcessingGroup =
         MayBeConstantInspectionBasedProcessing(),
         RemoveForExpressionLoopParameterTypeProcessing(),
         intentionBasedProcessing(ReplaceMapGetOrDefaultIntention()),
-        inspectionBasedProcessing(ReplaceGuardClauseWithFunctionCallInspection())
+        inspectionBasedProcessing(ReplaceGuardClauseWithFunctionCallInspection()),
+        inspectionBasedProcessing(SortModifiersInspection()),
+        intentionBasedProcessing(ConvertToRawStringTemplateIntention()) { element ->
+            element.parents.none {
+                (it as? KtProperty)?.hasModifier(KtTokens.CONST_KEYWORD) == true
+            } && ConvertToStringTemplateIntention.buildReplacement(element).entries.any {
+                (it as? KtEscapeStringTemplateEntry)?.unescapedValue == "\n"
+            }
+        },
+        intentionBasedProcessing(IndentRawStringIntention())
     )
 
 
@@ -222,7 +261,7 @@ private val cleaningUpDiagnosticBasedPostProcessingGroup =
 
 private val processings: List<NamedPostProcessingGroup> = listOf(
     NamedPostProcessingGroup(
-        "Inferring types",
+        KotlinNJ2KServicesBundle.message("processing.step.inferring.types"),
         listOf(
             InspectionLikeProcessingGroup(
                 processings = listOf(
@@ -237,14 +276,7 @@ private val processings: List<NamedPostProcessingGroup> = listOf(
         )
     ),
     NamedPostProcessingGroup(
-        "Formatting code",
-        listOf(
-            FormatCodeProcessing(),
-            ShortenReferenceProcessing()
-        )
-    ),
-    NamedPostProcessingGroup(
-        "Cleaning up code",
+        KotlinNJ2KServicesBundle.message("processing.step.cleaning.up.code"),
         listOf(
             InspectionLikeProcessingGroup(VarToValProcessing()),
             ConvertGettersAndSettersToPropertyProcessing(),
@@ -263,10 +295,10 @@ private val processings: List<NamedPostProcessingGroup> = listOf(
         )
     ),
     NamedPostProcessingGroup(
-        "Optimizing imports",
+        KotlinNJ2KServicesBundle.message("processing.step.optimizing.imports.and.formatting.code"),
         listOf(
-            OptimizeImportsProcessing(),
             ShortenReferenceProcessing(),
+            OptimizeImportsProcessing(),
             FormatCodeProcessing()
         )
     )

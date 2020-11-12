@@ -6,6 +6,9 @@
 package org.jetbrains.kotlin.idea.editor.quickDoc;
 
 import com.intellij.codeInsight.documentation.DocumentationManager;
+import com.intellij.codeInsight.hint.ParameterInfoController;
+import com.intellij.codeInsight.lookup.LookupEx;
+import com.intellij.codeInsight.lookup.LookupManager;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.psi.PsiElement;
@@ -32,6 +35,22 @@ public abstract class AbstractQuickDocProviderTest extends KotlinLightCodeInsigh
         PsiElement targetElement = documentationManager.findTargetElement(myFixture.getEditor(), myFixture.getFile());
         PsiElement originalElement = DocumentationManager.getOriginalElement(targetElement);
 
+        PsiElement list = ParameterInfoController.findArgumentList(myFixture.getFile(), myFixture.getEditor().getCaretModel().getOffset(), -1);
+        PsiElement expressionList = null;
+        if (list != null) {
+            LookupEx lookup = LookupManager.getInstance(myFixture.getProject()).getActiveLookup();
+            if (lookup != null) {
+                expressionList = null; // take completion variants for documentation then
+            }
+            else {
+                expressionList = list;
+            }
+        }
+
+        if (targetElement == null && expressionList != null) {
+            targetElement = expressionList;
+        }
+
         String info = DocumentationManager.getProviderFromElement(targetElement).generateDoc(targetElement, originalElement);
         if (info != null) {
             info = StringUtil.convertLineSeparators(info);
@@ -42,7 +61,7 @@ public abstract class AbstractQuickDocProviderTest extends KotlinLightCodeInsigh
 
         File testDataFile = new File(path);
         String textData = FileUtil.loadFile(testDataFile, true);
-        List<String> directives = InTextDirectivesUtils.findLinesWithPrefixesRemoved(textData, false, "INFO:");
+        List<String> directives = InTextDirectivesUtils.findLinesWithPrefixesRemoved(textData, false, true, "INFO:");
 
         if (directives.isEmpty()) {
             throw new FileComparisonFailure(

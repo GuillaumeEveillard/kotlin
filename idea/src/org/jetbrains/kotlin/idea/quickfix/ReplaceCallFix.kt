@@ -22,6 +22,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.util.PsiTreeUtil
 import org.jetbrains.kotlin.diagnostics.Diagnostic
+import org.jetbrains.kotlin.idea.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.getParentOfType
@@ -46,7 +47,7 @@ abstract class ReplaceCallFix(
 
     override fun invoke(project: Project, editor: Editor?, file: KtFile) {
         val element = element ?: return
-        val elvis = elvisOrEmpty(notNullNeeded)
+        val elvis = element.elvisOrEmpty(notNullNeeded)
         val betweenReceiverAndOperation = element.elementsBetweenReceiverAndOperation().joinToString(separator = "") { it.text }
         val newExpression = KtPsiFactory(element).createExpressionByPattern(
             "$0$betweenReceiverAndOperation$operation$1$elvis",
@@ -54,7 +55,7 @@ abstract class ReplaceCallFix(
             element.selectorExpression!!
         )
         val replacement = element.replace(newExpression)
-        if (notNullNeeded) {
+        if (elvis.isNotEmpty()) {
             replacement.moveCaretToEnd(editor, project)
         }
     }
@@ -74,14 +75,14 @@ class ReplaceImplicitReceiverCallFix(
 ) : KotlinQuickFixAction<KtExpression>(expression) {
     override fun getFamilyName() = text
 
-    override fun getText() = "Replace with safe (this?.) call"
+    override fun getText() = KotlinBundle.message("replace.with.safe.this.call")
 
     override fun invoke(project: Project, editor: Editor?, file: KtFile) {
         val element = element ?: return
-        val elvis = elvisOrEmpty(notNullNeeded)
+        val elvis = element.elvisOrEmpty(notNullNeeded)
         val newExpression = KtPsiFactory(element).createExpressionByPattern("this?.$0$elvis", element)
         val replacement = element.replace(newExpression)
-        if (notNullNeeded) {
+        if (elvis.isNotEmpty()) {
             replacement.moveCaretToEnd(editor, project)
         }
     }
@@ -92,7 +93,7 @@ class ReplaceWithSafeCallFix(
     notNullNeeded: Boolean
 ) : ReplaceCallFix(expression, "?.", notNullNeeded) {
 
-    override fun getText() = "Replace with safe (?.) call"
+    override fun getText() = KotlinBundle.message("replace.with.safe.call")
 
     companion object : KotlinSingleIntentionActionFactory() {
         override fun createAction(diagnostic: Diagnostic): IntentionAction? {
@@ -117,7 +118,7 @@ class ReplaceWithSafeCallForScopeFunctionFix(
     notNullNeeded: Boolean
 ) : ReplaceCallFix(expression, "?.", notNullNeeded) {
 
-    override fun getText() = "Replace scope function with safe (?.) call"
+    override fun getText() = KotlinBundle.message("replace.scope.function.with.safe.call")
 
     companion object : KotlinSingleIntentionActionFactory() {
         override fun createAction(diagnostic: Diagnostic): KotlinQuickFixAction<KtExpression>? {
@@ -168,7 +169,7 @@ class ReplaceWithSafeCallForScopeFunctionFix(
 }
 
 class ReplaceWithDotCallFix(expression: KtSafeQualifiedExpression) : ReplaceCallFix(expression, "."), CleanupFix {
-    override fun getText() = "Replace with dot call"
+    override fun getText() = KotlinBundle.message("replace.with.dot.call")
 
     companion object : KotlinSingleIntentionActionFactory() {
         override fun createAction(diagnostic: Diagnostic): IntentionAction? {

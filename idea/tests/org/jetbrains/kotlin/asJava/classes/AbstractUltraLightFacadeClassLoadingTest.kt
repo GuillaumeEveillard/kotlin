@@ -11,18 +11,16 @@ import org.jetbrains.kotlin.asJava.KotlinAsJavaSupport
 import org.jetbrains.kotlin.idea.perf.UltraLightChecker
 import org.jetbrains.kotlin.idea.test.KotlinLightCodeInsightFixtureTestCase
 import org.jetbrains.kotlin.idea.test.KotlinWithJdkAndRuntimeLightProjectDescriptor
-import org.jetbrains.kotlin.kdoc.psi.api.KDoc
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.KtFile
-import org.jetbrains.kotlin.psi.psiUtil.findDescendantOfType
 import java.io.File
 
 abstract class AbstractUltraLightFacadeClassTest : KotlinLightCodeInsightFixtureTestCase() {
     override fun getProjectDescriptor(): LightProjectDescriptor = KotlinWithJdkAndRuntimeLightProjectDescriptor.INSTANCE
 
-    fun doTest(testDataPath: String) {
+    open fun doTest(testDataPath: String) {
         val sourceText = File(testDataPath).readText()
-        val file = myFixture.addFileToProject(testDataPath, sourceText) as KtFile
+        myFixture.addFileToProject(testDataPath, sourceText) as KtFile
 
         UltraLightChecker.checkForReleaseCoroutine(sourceText, module)
 
@@ -34,25 +32,15 @@ abstract class AbstractUltraLightFacadeClassTest : KotlinLightCodeInsightFixture
         val scope = GlobalSearchScope.allScope(project)
         val facades = KotlinAsJavaSupport.getInstance(project).getFacadeNames(FqName.ROOT, scope)
 
+        checkLightFacades(testDataPath, facades, scope)
+    }
+
+    protected open fun checkLightFacades(testDataPath: String, facades: Collection<String>, scope: GlobalSearchScope) {
         for (facadeName in facades) {
             val ultraLightClass = UltraLightChecker.checkFacadeEquivalence(FqName(facadeName), scope, project)
             if (ultraLightClass != null) {
-                checkClassLoadingExpectations(file, ultraLightClass)
+                UltraLightChecker.checkDescriptorsLeak(ultraLightClass)
             }
         }
-    }
-
-    private fun checkClassLoadingExpectations(
-        primaryFile: KtFile,
-        ultraLightClass: KtLightClassForFacade
-    ) {
-
-         val clsLoadingExpected = primaryFile.findDescendantOfType<KDoc> { it.text?.contains("should load cls") == true } !== null
-
-        assertEquals(
-            "Cls-loaded status differs from expected for ${ultraLightClass.qualifiedName}",
-            clsLoadingExpected,
-            ultraLightClass.isClsDelegateLoaded
-        )
     }
 }

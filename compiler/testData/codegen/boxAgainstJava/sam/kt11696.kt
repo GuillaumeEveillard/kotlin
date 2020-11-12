@@ -1,4 +1,4 @@
-// IGNORE_BACKEND: JVM_IR
+// IGNORE_BACKEND_FIR: JVM_IR
 // WITH_RUNTIME
 // FILE: Promise.java
 import org.jetbrains.annotations.NotNull;

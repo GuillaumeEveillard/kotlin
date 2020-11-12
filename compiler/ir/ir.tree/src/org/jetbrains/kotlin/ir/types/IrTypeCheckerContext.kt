@@ -7,14 +7,10 @@ package org.jetbrains.kotlin.ir.types
 
 import org.jetbrains.kotlin.ir.descriptors.IrBuiltIns
 import org.jetbrains.kotlin.ir.symbols.IrClassSymbol
-import org.jetbrains.kotlin.ir.types.impl.IrSimpleTypeImpl
-import org.jetbrains.kotlin.ir.types.impl.makeTypeProjection
 import org.jetbrains.kotlin.types.AbstractTypeCheckerContext
-import org.jetbrains.kotlin.types.model.KotlinTypeMarker
-import org.jetbrains.kotlin.types.model.SimpleTypeMarker
-import org.jetbrains.kotlin.types.model.TypeConstructorMarker
+import org.jetbrains.kotlin.types.model.*
 
-class IrTypeCheckerContext(override val irBuiltIns: IrBuiltIns) : IrTypeSystemContext, AbstractTypeCheckerContext() {
+open class IrTypeCheckerContext(override val irBuiltIns: IrBuiltIns) : IrTypeSystemContext, AbstractTypeCheckerContext() {
 
     override fun substitutionSupertypePolicy(type: SimpleTypeMarker): SupertypesPolicy.DoCustomTransform {
         require(type is IrSimpleType)
@@ -29,18 +25,37 @@ class IrTypeCheckerContext(override val irBuiltIns: IrBuiltIns) : IrTypeSystemCo
         }
     }
 
-    override fun areEqualTypeConstructors(a: TypeConstructorMarker, b: TypeConstructorMarker) = super.isEqualTypeConstructors(a, b)
+    override val isErrorTypeEqualsToAnything get() = false
+    override val isStubTypeEqualsToAnything get() = false
 
-    override val isErrorTypeEqualsToAnything = false
     override val KotlinTypeMarker.isAllowedTypeVariable: Boolean
         get() = false
 
-    override fun newBaseTypeCheckerContext(errorTypesEqualToAnything: Boolean): AbstractTypeCheckerContext {
-        return IrTypeCheckerContext(irBuiltIns)
-    }
+    override fun newBaseTypeCheckerContext(
+        errorTypesEqualToAnything: Boolean,
+        stubTypesEqualToAnything: Boolean
+    ): AbstractTypeCheckerContext = IrTypeCheckerContext(irBuiltIns)
 
     override fun KotlinTypeMarker.isUninferredParameter(): Boolean = false
+    override fun KotlinTypeMarker.withNullability(nullable: Boolean): KotlinTypeMarker {
+        if (this.isSimpleType()) {
+            return this.asSimpleType()!!.withNullability(nullable)
+        } else {
+            error("withNullability for non-simple types is not supported in IR")
+        }
+    }
 
     override fun captureFromExpression(type: KotlinTypeMarker): KotlinTypeMarker? =
         error("Captured type is unsupported in IR")
+
+    override fun DefinitelyNotNullTypeMarker.original(): SimpleTypeMarker =
+        error("DefinitelyNotNull type is unsupported in IR")
+
+    override fun KotlinTypeMarker.makeDefinitelyNotNullOrNotNull(): KotlinTypeMarker {
+        error("makeDefinitelyNotNullOrNotNull is not supported in IR")
+    }
+
+    override fun SimpleTypeMarker.makeSimpleTypeDefinitelyNotNullOrNotNull(): SimpleTypeMarker {
+        error("makeSimpleTypeDefinitelyNotNullOrNotNull is not yet supported in IR")
+    }
 }

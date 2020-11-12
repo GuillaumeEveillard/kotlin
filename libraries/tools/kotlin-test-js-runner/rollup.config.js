@@ -1,3 +1,8 @@
+/*
+ * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
+ */
+
 import typescript from 'rollup-plugin-typescript2';
 import nodeResolve from 'rollup-plugin-node-resolve';
 import commonjs from 'rollup-plugin-commonjs';
@@ -17,26 +22,6 @@ export default [
         plugins: plugins()
     },
     {
-        input: './nodejs-source-map-support.js',
-        external: ['path', 'fs', 'module'],
-        output: {
-            file: 'lib/kotlin-nodejs-source-map-support.js',
-            format: 'cjs',
-            sourcemap: true
-        },
-        plugins: [
-            nodeResolve({
-                            jsnext: true,
-                            main: true
-                        }),
-            commonjs(),
-            terser({
-                       compress: true,
-                       sourcemap: true
-                   })
-        ]
-    },
-    {
         input: './karma.ts',
         output: {
             file: 'lib/kotlin-test-karma-runner.js',
@@ -44,6 +29,50 @@ export default [
             sourcemap: true
         },
         plugins: plugins()
+    },
+    {
+        input: './karma-debug-runner.js',
+        output: {
+            file: 'lib/karma-debug-runner.js',
+            format: 'cjs'
+        }
+    },
+    {
+        input: './karma-debug-framework.js',
+        output: {
+            file: 'lib/karma-debug-framework.js',
+            format: 'cjs'
+        }
+    },
+    {
+        input: './karma-kotlin-reporter.js',
+        external: ['path', 'util'],
+        output: {
+            file: 'lib/karma-kotlin-reporter.js',
+            format: 'cjs'
+        }
+    },
+    {
+        input: './tc-log-appender.js',
+        output: {
+            file: 'lib/tc-log-appender.js',
+            format: 'cjs'
+        }
+    },
+    {
+        input: './tc-log-error-webpack.js',
+        output: {
+            file: 'lib/tc-log-error-webpack.js',
+            format: 'cjs'
+        }
+    },
+    {
+        input: './mocha-kotlin-reporter.js',
+        external: ['path', 'util'],
+        output: {
+            file: 'lib/mocha-kotlin-reporter.js',
+            format: 'cjs'
+        }
     }
 ]
 

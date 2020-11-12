@@ -28,7 +28,7 @@ import org.apache.maven.project.MavenProject;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.kotlin.cli.common.arguments.K2JSCompilerArguments;
 import org.jetbrains.kotlin.cli.js.K2JSCompiler;
-import org.jetbrains.kotlin.utils.LibraryUtils;
+import org.jetbrains.kotlin.utils.JsLibraryUtils;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -105,8 +105,9 @@ public class K2JSCompilerMojo extends KotlinCompileMojoBase<K2JSCompilerArgument
         arguments.setMetaInfo(metaInfo);
         arguments.setModuleKind(moduleKind);
         arguments.setMain(main);
-        arguments.setIrBackend(useIrBackend);
-        arguments.setIrLegacyGradlePluginCompatibility(true);
+        arguments.setIrOnly(useIrBackend);
+        arguments.setIrProduceJs(useIrBackend);
+        arguments.setIrProduceKlibDir(useIrBackend);
 
         List<String> libraries;
         try {
@@ -145,7 +146,7 @@ public class K2JSCompilerMojo extends KotlinCompileMojoBase<K2JSCompilerArgument
     }
 
     private boolean checkIsKotlinJavascriptLibrary(File file) {
-        return useIrBackend ? LibraryUtils.isKotlinJavascriptIrLibrary(file) : LibraryUtils.isKotlinJavascriptLibrary(file);
+        return useIrBackend ? JsLibraryUtils.isKotlinJavascriptIrLibrary(file) : JsLibraryUtils.isKotlinJavascriptLibrary(file);
     }
 
     /**

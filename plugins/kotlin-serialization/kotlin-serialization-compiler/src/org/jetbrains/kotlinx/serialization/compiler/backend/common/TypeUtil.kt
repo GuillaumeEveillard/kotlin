@@ -1,17 +1,6 @@
 /*
- * Copyright 2010-2017 JetBrains s.r.o.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
 package org.jetbrains.kotlinx.serialization.compiler.backend.common
@@ -30,6 +19,7 @@ import org.jetbrains.kotlin.psi.KtParameter
 import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtPureClassOrObject
 import org.jetbrains.kotlin.resolve.BindingContext
+import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameUnsafe
 import org.jetbrains.kotlin.types.KotlinType
 import org.jetbrains.kotlin.types.typeUtil.*
 import org.jetbrains.kotlinx.serialization.compiler.backend.jvm.enumSerializerId
@@ -40,17 +30,21 @@ import org.jetbrains.kotlinx.serialization.compiler.resolve.SerializationPackage
 open class SerialTypeInfo(
     val property: SerializableProperty,
     val elementMethodPrefix: String,
-    val serializer: ClassDescriptor? = null,
-    val unit: Boolean = false
+    val serializer: ClassDescriptor? = null
 )
 
 fun AbstractSerialGenerator.findAddOnSerializer(propertyType: KotlinType, module: ModuleDescriptor): ClassDescriptor? {
     additionalSerializersInScopeOfCurrentFile[propertyType]?.let { return it }
     if (propertyType in contextualKClassListInCurrentFile)
         return module.getClassFromSerializationPackage(SpecialBuiltins.contextSerializer)
+    if (propertyType.toClassDescriptor?.annotations?.hasAnnotation(SerializationAnnotations.polymorphicFqName) == true)
+        return module.getClassFromSerializationPackage(SpecialBuiltins.polymorphicSerializer)
     if (propertyType.isMarkedNullable) return findAddOnSerializer(propertyType.makeNotNullable(), module)
     return null
 }
+
+fun KotlinType.isSerializableObject() =
+    toClassDescriptor?.run { kind == ClassKind.OBJECT && hasSerializableAnnotationWithoutArgs } == true
 
 @Suppress("FunctionName", "LocalVariableName")
 fun AbstractSerialGenerator.getSerialTypeInfo(property: SerializableProperty): SerialTypeInfo {
@@ -69,15 +63,10 @@ fun AbstractSerialGenerator.getSerialTypeInfo(property: SerializableProperty): S
 //          alternative:  KotlinBuiltIns.getPrimitiveType(T)!!.typeName.identifier
         )
         KotlinBuiltIns.isString(T) -> SerialTypeInfo(property, "String")
-        KotlinBuiltIns.isUnit(T) -> SerialTypeInfo(property, "Unit", unit = true)
         KotlinBuiltIns.isNonPrimitiveArray(T.toClassDescriptor!!) -> {
             val serializer = property.serializableWith?.toClassDescriptor ?: property.module.findClassAcrossModuleDependencies(
                 referenceArraySerializerId
             )
-            SerializableInfo(serializer)
-        }
-        T.toClassDescriptor?.kind == ClassKind.ENUM_CLASS -> {
-            val serializer = property.module.findClassAcrossModuleDependencies(enumSerializerId)
             SerializableInfo(serializer)
         }
         else -> {
@@ -88,6 +77,30 @@ fun AbstractSerialGenerator.getSerialTypeInfo(property: SerializableProperty): S
     }
 }
 
+fun AbstractSerialGenerator.allSealedSerializableSubclassesFor(
+    klass: ClassDescriptor,
+    module: ModuleDescriptor
+): Pair<List<KotlinType>, List<ClassDescriptor>> {
+    assert(klass.kind == ClassKind.CLASS && klass.modality == Modality.SEALED)
+    fun recursiveSealed(klass: ClassDescriptor): Collection<ClassDescriptor> {
+        return klass.sealedSubclasses.flatMap { if (it.modality == Modality.SEALED) recursiveSealed(it) else setOf(it) }
+    }
+
+    val serializableSubtypes = recursiveSealed(klass).map { it.toSimpleType() }
+    return serializableSubtypes.mapNotNull { subtype ->
+        findTypeSerializerOrContextUnchecked(module, subtype)?.let { Pair(subtype, it) }
+    }.unzip()
+}
+
+fun KotlinType.serialName(): String {
+    val serializableDescriptor = this.toClassDescriptor!!
+    return serializableDescriptor.serialName()
+}
+
+fun ClassDescriptor.serialName(): String {
+    return annotations.serialNameValue ?: fqNameUnsafe.asString()
+}
+
 /**
  * Returns class descriptor for ContextSerializer or PolymorphicSerializer
  * if [annotations] contains @Contextual or @Polymorphic annotation
@@ -96,7 +109,7 @@ fun analyzeSpecialSerializers(
     moduleDescriptor: ModuleDescriptor,
     annotations: Annotations
 ): ClassDescriptor? = when {
-    annotations.hasAnnotation(SerializationAnnotations.contextualFqName) ->
+    annotations.hasAnnotation(SerializationAnnotations.contextualFqName) || annotations.hasAnnotation(SerializationAnnotations.contextualOnPropertyFqName) ->
         moduleDescriptor.getClassFromSerializationPackage(SpecialBuiltins.contextSerializer)
     // can be annotation on type usage, e.g. List<@Polymorphic Any>
     annotations.hasAnnotation(SerializationAnnotations.polymorphicFqName) ->
@@ -110,9 +123,12 @@ fun AbstractSerialGenerator.findTypeSerializerOrContextUnchecked(
 ): ClassDescriptor? {
     val annotations = kType.annotations
     if (kType.isTypeParameter()) return null
-    if (kType.isMarkedNullable) return findTypeSerializerOrContextUnchecked(module, kType.makeNotNullable())
     annotations.serializableWith(module)?.let { return it.toClassDescriptor }
     additionalSerializersInScopeOfCurrentFile[kType]?.let { return it }
+    if (!kType.isMarkedNullable) {
+        additionalSerializersInScopeOfCurrentFile[kType.makeNullable()]?.let { return it }
+    }
+
     if (kType in contextualKClassListInCurrentFile) return module.getClassFromSerializationPackage(SpecialBuiltins.contextSerializer)
     return analyzeSpecialSerializers(module, annotations) ?: findTypeSerializer(module, kType)
 }
@@ -125,7 +141,7 @@ fun AbstractSerialGenerator.findTypeSerializerOrContext(
     if (kType.isTypeParameter()) return null
     return findTypeSerializerOrContextUnchecked(module, kType) ?: throw CompilationException(
         "Serializer for element of type $kType has not been found.\n" +
-                "To use context serializer as fallback, explicitly annotate element with @ContextualSerialization",
+                "To use context serializer as fallback, explicitly annotate element with @Contextual",
         null,
         sourceElement
     )
@@ -136,6 +152,7 @@ fun findTypeSerializer(module: ModuleDescriptor, kType: KotlinType): ClassDescri
     if (userOverride != null) return userOverride.toClassDescriptor
     if (kType.isTypeParameter()) return null
     if (KotlinBuiltIns.isArray(kType)) return module.getClassFromInternalSerializationPackage(SpecialBuiltins.referenceArraySerializer)
+    if (kType.isSerializableObject()) return module.getClassFromInternalSerializationPackage(SpecialBuiltins.objectSerializer)
     val stdSer = findStandardKotlinTypeSerializer(module, kType) // see if there is a standard serializer
         ?: findEnumTypeSerializer(module, kType)
     if (stdSer != null) return stdSer
@@ -189,12 +206,16 @@ fun findStandardKotlinTypeSerializer(module: ModuleDescriptor, kType: KotlinType
         "java.util.Map.Entry" -> "MapEntrySerializer"
         else -> return null
     }
-    return module.findClassAcrossModuleDependencies(ClassId(internalPackageFqName, Name.identifier(name)))
+    val identifier = Name.identifier(name)
+    return module.findClassAcrossModuleDependencies(ClassId(internalPackageFqName, identifier))
+        ?: module.findClassAcrossModuleDependencies(ClassId(SerializationPackages.packageFqName, identifier))
 }
 
 fun findEnumTypeSerializer(module: ModuleDescriptor, kType: KotlinType): ClassDescriptor? {
     val classDescriptor = kType.toClassDescriptor ?: return null
-    return if (classDescriptor.kind == ClassKind.ENUM_CLASS) module.findClassAcrossModuleDependencies(enumSerializerId) else null
+    return if (classDescriptor.kind == ClassKind.ENUM_CLASS && !classDescriptor.isSerializableEnum())
+        module.findClassAcrossModuleDependencies(enumSerializerId)
+    else null
 }
 
 internal fun KtPureClassOrObject.bodyPropertiesDescriptorsMap(

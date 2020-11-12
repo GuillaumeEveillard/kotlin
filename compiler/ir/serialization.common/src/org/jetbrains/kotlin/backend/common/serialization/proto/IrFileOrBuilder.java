@@ -8,18 +8,17 @@ public interface IrFileOrBuilder extends
     org.jetbrains.kotlin.protobuf.MessageLiteOrBuilder {
 
   /**
-   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.UniqId declaration_id = 1;</code>
+   * <code>repeated int32 declaration_id = 1 [packed = true];</code>
    */
-  java.util.List<org.jetbrains.kotlin.backend.common.serialization.proto.UniqId> 
-      getDeclarationIdList();
+  java.util.List<java.lang.Integer> getDeclarationIdList();
   /**
-   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.UniqId declaration_id = 1;</code>
-   */
-  org.jetbrains.kotlin.backend.common.serialization.proto.UniqId getDeclarationId(int index);
-  /**
-   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.UniqId declaration_id = 1;</code>
+   * <code>repeated int32 declaration_id = 1 [packed = true];</code>
    */
   int getDeclarationIdCount();
+  /**
+   * <code>repeated int32 declaration_id = 1 [packed = true];</code>
+   */
+  int getDeclarationId(int index);
 
   /**
    * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.FileEntry file_entry = 2;</code>
@@ -31,34 +30,56 @@ public interface IrFileOrBuilder extends
   org.jetbrains.kotlin.backend.common.serialization.proto.FileEntry getFileEntry();
 
   /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.FqName fq_name = 3;</code>
+   * <code>repeated int32 fq_name = 3 [packed = true];</code>
    */
-  boolean hasFqName();
+  java.util.List<java.lang.Integer> getFqNameList();
   /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.FqName fq_name = 3;</code>
+   * <code>repeated int32 fq_name = 3 [packed = true];</code>
    */
-  org.jetbrains.kotlin.backend.common.serialization.proto.FqName getFqName();
+  int getFqNameCount();
+  /**
+   * <code>repeated int32 fq_name = 3 [packed = true];</code>
+   */
+  int getFqName(int index);
 
   /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.Annotations annotations = 4;</code>
+   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall annotation = 4;</code>
    */
-  boolean hasAnnotations();
+  java.util.List<org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall> 
+      getAnnotationList();
   /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.Annotations annotations = 4;</code>
+   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall annotation = 4;</code>
    */
-  org.jetbrains.kotlin.backend.common.serialization.proto.Annotations getAnnotations();
+  org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall getAnnotation(int index);
+  /**
+   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall annotation = 4;</code>
+   */
+  int getAnnotationCount();
 
   /**
-   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex explicitly_exported_to_compiler = 5;</code>
+   * <code>repeated int64 explicitly_exported_to_compiler = 5 [packed = true];</code>
    */
-  java.util.List<org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex> 
-      getExplicitlyExportedToCompilerList();
+  java.util.List<java.lang.Long> getExplicitlyExportedToCompilerList();
   /**
-   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex explicitly_exported_to_compiler = 5;</code>
-   */
-  org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex getExplicitlyExportedToCompiler(int index);
-  /**
-   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex explicitly_exported_to_compiler = 5;</code>
+   * <code>repeated int64 explicitly_exported_to_compiler = 5 [packed = true];</code>
    */
   int getExplicitlyExportedToCompilerCount();
+  /**
+   * <code>repeated int64 explicitly_exported_to_compiler = 5 [packed = true];</code>
+   */
+  long getExplicitlyExportedToCompiler(int index);
+
+  /**
+   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.Actual actuals = 6;</code>
+   */
+  java.util.List<org.jetbrains.kotlin.backend.common.serialization.proto.Actual> 
+      getActualsList();
+  /**
+   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.Actual actuals = 6;</code>
+   */
+  org.jetbrains.kotlin.backend.common.serialization.proto.Actual getActuals(int index);
+  /**
+   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.Actual actuals = 6;</code>
+   */
+  int getActualsCount();
 }

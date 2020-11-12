@@ -1,5 +1,4 @@
 // SKIP_JDK6
-// IGNORE_BACKEND: JVM_IR
 // TARGET_BACKEND: JVM
 // FULL_JDK
 // WITH_RUNTIME
@@ -75,7 +74,7 @@ fun box(): String {
         // and returning defaultValue if null was received seems incorrect here
         mm.getOrDefault("abc", null)
         return "fail 7"
-    } catch (e: java.lang.IllegalArgumentException) {
+    } catch (e: java.lang.NullPointerException) {
         // Parameter specified as non-null is null
     }
 

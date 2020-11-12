@@ -1,4 +1,4 @@
-// IGNORE_BACKEND_MULTI_MODULE: JVM_IR
+
 // FILE: 1.kt
 
 package test
@@ -90,6 +90,15 @@ test/_1Kt
 _2Kt
 *L
 1#1,19:1
-7#2,3:20
-9#3,2:23
+7#2,2:20
+9#2:24
+9#3,2:22
+*E
+*S KotlinDebug
+*F
++ 1 1.kt
+test/_1Kt$test$1
+*L
+14#1,2:20
+14#1:24
 *E

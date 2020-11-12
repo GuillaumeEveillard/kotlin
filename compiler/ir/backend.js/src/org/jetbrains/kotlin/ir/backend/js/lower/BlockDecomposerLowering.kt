@@ -5,22 +5,29 @@
 
 package org.jetbrains.kotlin.ir.backend.js.lower
 
+import org.jetbrains.kotlin.backend.common.BodyLoweringPass
 import org.jetbrains.kotlin.backend.common.CommonBackendContext
-import org.jetbrains.kotlin.backend.common.DeclarationContainerLoweringPass
 import org.jetbrains.kotlin.backend.common.ir.isElseBranch
-import org.jetbrains.kotlin.descriptors.Visibilities
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.IrStatement
+import org.jetbrains.kotlin.ir.backend.js.JsCommonBackendContext
 import org.jetbrains.kotlin.ir.backend.js.JsIrBackendContext
 import org.jetbrains.kotlin.ir.backend.js.ir.JsIrBuilder
+import org.jetbrains.kotlin.ir.backend.js.utils.isPure
+import org.jetbrains.kotlin.ir.builders.declarations.buildFun
 import org.jetbrains.kotlin.ir.declarations.*
 import org.jetbrains.kotlin.ir.expressions.*
 import org.jetbrains.kotlin.ir.expressions.impl.*
+import org.jetbrains.kotlin.ir.transformStatement
 import org.jetbrains.kotlin.ir.types.IrType
-import org.jetbrains.kotlin.ir.util.*
+import org.jetbrains.kotlin.ir.util.dump
+import org.jetbrains.kotlin.ir.util.patchDeclarationParents
+import org.jetbrains.kotlin.ir.util.transformFlat
 import org.jetbrains.kotlin.ir.visitors.IrElementTransformer
 import org.jetbrains.kotlin.ir.visitors.IrElementTransformerVoid
 import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
+import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.utils.addIfNotNull
 
 class JsBlockDecomposerLowering(val context: JsIrBackendContext) : AbstractBlockDecomposerLowering(context) {
@@ -28,65 +35,63 @@ class JsBlockDecomposerLowering(val context: JsIrBackendContext) : AbstractBlock
         JsIrBuilder.buildCall(context.intrinsics.unreachable.symbol, context.irBuiltIns.nothingType)
 }
 
-abstract class AbstractBlockDecomposerLowering(context: CommonBackendContext) : DeclarationContainerLoweringPass {
+abstract class AbstractBlockDecomposerLowering(
+    private val context: JsCommonBackendContext
+) : BodyLoweringPass {
+
+    private val nothingType = context.irBuiltIns.nothingType
 
     // Expression with Nothing type to be inserted in places of unreachable expression
     abstract fun unreachableExpression(): IrExpression
 
     private val decomposerTransformer = BlockDecomposerTransformer(context, ::unreachableExpression)
-    private val nothingType = context.irBuiltIns.nothingType
 
-    override fun lower(irDeclarationContainer: IrDeclarationContainer) {
-        irDeclarationContainer.transformDeclarationsFlat { declaration ->
-            when (declaration) {
-                is IrFunction -> {
-                    lower(declaration)
-                    listOf(declaration)
+    override fun lower(irBody: IrBody, container: IrDeclaration) {
+        when (container) {
+            is IrFunction -> {
+                container.accept(decomposerTransformer, null)
+                irBody.patchDeclarationParents(container)
+            }
+            is IrField -> {
+                container.initializer?.apply {
+                    val initFunction = context.irFactory.buildFun {
+                        name = Name.identifier(container.name.asString() + "\$init\$")
+                        returnType = container.type
+                        visibility = DescriptorVisibilities.PRIVATE
+                        origin = JsIrBuilder.SYNTHESIZED_DECLARATION
+                    }.apply {
+                        parent = container.parent
+                    }
+
+                    val newBody = toBlockBody(initFunction)
+                    newBody.patchDeclarationParents(initFunction)
+                    initFunction.body = newBody
+
+                    initFunction.accept(decomposerTransformer, null)
+
+                    val lastStatement = newBody.statements.last()
+                    val actualParent = if (newBody.statements.size > 1 || lastStatement !is IrReturn || lastStatement.value != expression) {
+                        expression = JsIrBuilder.buildCall(initFunction.symbol, expression.type)
+                        stageController.unrestrictDeclarationListsAccess {
+                            (container.parent as IrDeclarationContainer).declarations += initFunction
+                        }
+                        initFunction
+                    } else {
+                        container
+                    }
+
+                    patchDeclarationParents(actualParent)
                 }
-                is IrField -> lower(declaration, irDeclarationContainer)
-                else -> listOf(declaration)
             }
         }
-    }
-
-    fun lower(irFunction: IrFunction) {
-        (irFunction.body as? IrExpressionBody)?.apply {
-            irFunction.body = toBlockBody(irFunction)
-        }
-        irFunction.accept(decomposerTransformer, null)
     }
 
     private fun IrExpressionBody.toBlockBody(containingFunction: IrFunction): IrBlockBody {
-        expression.patchDeclarationParents(containingFunction)
-        val returnStatement = JsIrBuilder.buildReturn(containingFunction.symbol, expression, nothingType)
-        return IrBlockBodyImpl(expression.startOffset, expression.endOffset).apply {
+        return context.irFactory.createBlockBody(startOffset, endOffset) {
+            expression.patchDeclarationParents(containingFunction)
+            val returnStatement = JsIrBuilder.buildReturn(containingFunction.symbol, expression, nothingType)
             statements += returnStatement
         }
-    }
-
-    fun lower(irField: IrField, container: IrDeclarationContainer): List<IrDeclaration> {
-        irField.initializer?.apply {
-            val initFunction = JsIrBuilder.buildFunction(
-                irField.name.asString() + "\$init\$",
-                expression.type,
-                container,
-                Visibilities.PRIVATE
-            )
-
-            val newBody = toBlockBody(initFunction)
-            newBody.patchDeclarationParents(initFunction)
-            initFunction.body = newBody
-
-            lower(initFunction)
-
-            val lastStatement = newBody.statements.last()
-            if (newBody.statements.size > 1 || lastStatement !is IrReturn || lastStatement.value != expression) {
-                expression = JsIrBuilder.buildCall(initFunction.symbol, expression.type)
-                return listOf(initFunction, irField)
-            }
-        }
-
-        return listOf(irField)
     }
 }
 
@@ -94,7 +99,7 @@ class BlockDecomposerTransformer(
     private val context: CommonBackendContext,
     private val unreachableExpression: () -> IrExpression
 ) : IrElementTransformerVoid() {
-    private lateinit var function: IrFunction
+    private lateinit var function: IrDeclarationParent
     private var tmpVarCounter: Int = 0
 
     private val statementTransformer = StatementTransformer()
@@ -102,24 +107,43 @@ class BlockDecomposerTransformer(
 
     private val constTrue get() = JsIrBuilder.buildBoolean(context.irBuiltIns.booleanType, true)
     private val constFalse get() = JsIrBuilder.buildBoolean(context.irBuiltIns.booleanType, false)
-    private val nothingType = context.irBuiltIns.nothingNType
 
     private val unitType = context.irBuiltIns.unitType
     private val unitValue get() = JsIrBuilder.buildGetObjectValue(unitType, context.irBuiltIns.unitClass)
 
     private val booleanNotSymbol = context.irBuiltIns.booleanNotSymbol
 
+    override fun visitScript(declaration: IrScript): IrStatement {
+        function = declaration
+
+        with(declaration) {
+            val transformedStatements = mutableListOf<IrStatement>()
+            statements.forEach {
+                val transformer = if (it === statements.last()) expressionTransformer else statementTransformer
+                val s = it.transformStatement(transformer)
+                if (s is IrComposite) {
+                    transformedStatements.addAll(s.statements)
+                } else {
+                    transformedStatements.add(s)
+                }
+            }
+            statements.clear()
+            statements.addAll(transformedStatements)
+        }
+        return declaration
+    }
+
     override fun visitFunction(declaration: IrFunction): IrStatement {
         function = declaration
         tmpVarCounter = 0
-        return declaration.transform(statementTransformer, null)
+        return declaration.transformStatement(statementTransformer)
     }
 
     override fun visitElement(element: IrElement) = element.transform(statementTransformer, null)
 
     private fun processStatements(statements: MutableList<IrStatement>) {
         statements.transformFlat {
-            destructureComposite(it.transform(statementTransformer, null))
+            destructureComposite(it.transformStatement(statementTransformer))
         }
     }
 
@@ -130,7 +154,7 @@ class BlockDecomposerTransformer(
 
     private fun IrStatement.asExpression(last: IrExpression): IrExpression {
         val composite = JsIrBuilder.buildComposite(last.type)
-        composite.statements += transform(statementTransformer, null)
+        composite.statements += transformStatement(statementTransformer)
         composite.statements += last
         return composite
     }
@@ -243,13 +267,13 @@ class BlockDecomposerTransformer(
             }
         }
 
-        override fun visitSetVariable(expression: IrSetVariable): IrExpression {
+        override fun visitSetValue(expression: IrSetValue): IrExpression {
             expression.transformChildrenVoid(expressionTransformer)
 
             val composite = expression.value as? IrComposite ?: return expression
 
             return materializeLastExpression(composite) {
-                expression.run { IrSetVariableImpl(startOffset, endOffset, type, symbol, it, origin) }
+                expression.run { IrSetValueImpl(startOffset, endOffset, type, symbol, it, origin) }
             }
         }
 
@@ -412,7 +436,7 @@ class BlockDecomposerTransformer(
 
     private inner class ExpressionTransformer : IrElementTransformerVoid() {
 
-        override fun visitExpression(expression: IrExpression) = expression.transformChildren()
+        override fun visitExpression(expression: IrExpression) = expression.apply { transformChildrenVoid() }
 
         override fun visitGetField(expression: IrGetField): IrExpression {
             expression.transformChildrenVoid(expressionTransformer)
@@ -421,6 +445,16 @@ class BlockDecomposerTransformer(
 
             return materializeLastExpression(composite) {
                 expression.run { IrGetFieldImpl(startOffset, endOffset, symbol, type, it, origin, superQualifierSymbol) }
+            }
+        }
+
+        override fun visitTypeOperator(expression: IrTypeOperatorCall): IrExpression {
+            expression.transformChildrenVoid(expressionTransformer)
+
+            val composite = expression.argument as? IrComposite ?: return expression
+
+            return materializeLastExpression(composite) {
+                expression.apply { argument = it }
             }
         }
 
@@ -436,7 +470,7 @@ class BlockDecomposerTransformer(
 
         override fun visitLoop(loop: IrLoop) = loop.asExpression(unitValue)
 
-        override fun visitSetVariable(expression: IrSetVariable) = expression.asExpression(unitValue)
+        override fun visitSetValue(expression: IrSetValue) = expression.asExpression(unitValue)
 
         override fun visitSetField(expression: IrSetField) = expression.asExpression(unitValue)
 
@@ -485,6 +519,7 @@ class BlockDecomposerTransformer(
                     compositesLeft == 0 -> value
                     index == 0 && dontDetachFirstArgument -> value
                     value == null -> value
+                    value.isPure(false) -> value
                     else -> {
                         // TODO: do not wrap if value is pure (const, variable, etc)
                         val irVar = makeTempVar(value.type, value)
@@ -534,7 +569,7 @@ class BlockDecomposerTransformer(
         // var p4_tmp = p4
         // var p5_tmp = block {}
         // d_tmp.foo(p1_tmp, p2_tmp, p3_tmp, p4_tmp, p5_tmp, p6, p7)
-        override fun visitMemberAccess(expression: IrMemberAccessExpression): IrExpression {
+        override fun visitMemberAccess(expression: IrMemberAccessExpression<*>): IrExpression {
             expression.transformChildrenVoid(expressionTransformer)
 
             val oldArguments = mutableListOf(expression.dispatchReceiver, expression.extensionReceiver)
@@ -620,10 +655,10 @@ class BlockDecomposerTransformer(
             val newStatements = mutableListOf<IrStatement>()
 
             for (i in 0 until expression.statements.lastIndex) {
-                newStatements += destructureComposite(expression.statements[i].transform(statementTransformer, null))
+                newStatements += destructureComposite(expression.statements[i].transformStatement(statementTransformer))
             }
 
-            newStatements += destructureComposite(expression.statements.last().transform(expressionTransformer, null))
+            newStatements += destructureComposite(expression.statements.last().transformStatement(expressionTransformer))
 
             return JsIrBuilder.buildComposite(expression.type, newStatements)
         }

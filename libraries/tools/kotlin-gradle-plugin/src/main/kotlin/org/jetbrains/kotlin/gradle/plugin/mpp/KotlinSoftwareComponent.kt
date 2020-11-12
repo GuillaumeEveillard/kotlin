@@ -26,10 +26,13 @@ abstract class KotlinSoftwareComponent(
     protected val kotlinTargets: Iterable<KotlinTarget>
 ) : SoftwareComponentInternal, ComponentWithVariants {
 
-    override fun getUsages(): Set<UsageContext> = emptySet()
+    private val metadataTarget: KotlinMetadataTarget
+        get() = kotlinTargets.filterIsInstance<KotlinMetadataTarget>().single()
+
+    override fun getUsages(): Set<UsageContext> = (metadataTarget.components.single() as SoftwareComponentInternal).usages
 
     override fun getVariants(): Set<SoftwareComponent> =
-        kotlinTargets.flatMap { it.components }.toSet()
+        kotlinTargets.minus(metadataTarget).flatMap { it.components }.toSet()
 
     override fun getName(): String = name
 
@@ -55,13 +58,16 @@ object NativeUsage {
 interface KotlinUsageContext : UsageContext {
     val compilation: KotlinCompilation<*>
     val dependencyConfigurationName: String
+    val includeIntoProjectStructureMetadata: Boolean
 }
 
 class DefaultKotlinUsageContext(
     override val compilation: KotlinCompilation<*>,
     private val usage: Usage,
     override val dependencyConfigurationName: String,
-    private val overrideConfigurationArtifacts: Set<PublishArtifact>? = null
+    private val overrideConfigurationArtifacts: Set<PublishArtifact>? = null,
+    private val overrideConfigurationAttributes: AttributeContainer? = null,
+    override val includeIntoProjectStructureMetadata: Boolean = true
 ) : KotlinUsageContext {
 
     private val kotlinTarget: KotlinTarget get() = compilation.target
@@ -69,11 +75,7 @@ class DefaultKotlinUsageContext(
 
     override fun getUsage(): Usage = usage
 
-    override fun getName(): String = kotlinTarget.targetName + when (dependencyConfigurationName) {
-        kotlinTarget.apiElementsConfigurationName -> "-api"
-        kotlinTarget.runtimeElementsConfigurationName -> "-runtime"
-        else -> "-$dependencyConfigurationName" // for Android variants
-    }
+    override fun getName(): String = dependencyConfigurationName
 
     private val configuration: Configuration
         get() = project.configurations.getByName(dependencyConfigurationName)
@@ -90,7 +92,7 @@ class DefaultKotlinUsageContext(
         configuration.artifacts
 
     override fun getAttributes(): AttributeContainer {
-        val configurationAttributes = configuration.attributes
+        val configurationAttributes = overrideConfigurationAttributes ?: configuration.attributes
 
         /** TODO Using attributes of a detached configuration is a small and 'conservative' fix for KT-29758, [HierarchyAttributeContainer]
          * being rejected by Gradle 5.2+; we may need to either not filter the attributes, which will lead to

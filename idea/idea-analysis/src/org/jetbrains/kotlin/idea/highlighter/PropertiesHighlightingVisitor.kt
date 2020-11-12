@@ -1,5 +1,5 @@
 /*
- * Copyright 2000-2018 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Copyright 2000-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
@@ -42,6 +42,7 @@ internal class PropertiesHighlightingVisitor(holder: AnnotationHolder, bindingCo
         val resolvedCall = expression.getResolvedCall(bindingContext)
 
         val attributesKey = resolvedCall?.let { call ->
+            @Suppress("DEPRECATION")
             Extensions.getExtensions(HighlighterExtension.EP_NAME).firstNotNullResult { extension ->
                 extension.highlightCall(expression, call)
             }
@@ -90,20 +91,24 @@ internal class PropertiesHighlightingVisitor(holder: AnnotationHolder, bindingCo
         }
     }
 
-    private fun attributeKeyByPropertyType(descriptor: PropertyDescriptor): TextAttributesKey? {
-        return when {
-            descriptor.isDynamic() ->
-                // The property is set in VariablesHighlightingVisitor
-                null
+    private fun attributeKeyByPropertyType(descriptor: PropertyDescriptor): TextAttributesKey? = when {
+        descriptor.isDynamic() ->
+            // The property is set in VariablesHighlightingVisitor
+            null
 
-            descriptor.extensionReceiverParameter != null ->
-                if (descriptor.isSynthesized) SYNTHETIC_EXTENSION_PROPERTY else EXTENSION_PROPERTY
+        KotlinHighlightingUtil.hasExtensionReceiverParameter(descriptor) ->
+            if (descriptor.isSynthesized) SYNTHETIC_EXTENSION_PROPERTY else EXTENSION_PROPERTY
 
-            DescriptorUtils.isStaticDeclaration(descriptor) ->
+        DescriptorUtils.isStaticDeclaration(descriptor) ->
+            if (KotlinHighlightingUtil.hasCustomPropertyDeclaration(descriptor))
+                PACKAGE_PROPERTY_CUSTOM_PROPERTY_DECLARATION
+            else
                 PACKAGE_PROPERTY
 
-            else ->
+        else ->
+            if (KotlinHighlightingUtil.hasCustomPropertyDeclaration(descriptor))
+                INSTANCE_PROPERTY_CUSTOM_PROPERTY_DECLARATION
+            else
                 INSTANCE_PROPERTY
-        }
     }
 }

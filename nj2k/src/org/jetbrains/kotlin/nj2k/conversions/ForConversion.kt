@@ -17,6 +17,8 @@ import org.jetbrains.kotlin.nj2k.tree.*
 import org.jetbrains.kotlin.nj2k.types.JKJavaArrayType
 import org.jetbrains.kotlin.nj2k.types.JKJavaPrimitiveType
 import org.jetbrains.kotlin.nj2k.types.JKNoType
+import org.jetbrains.kotlin.utils.NumberWithRadix
+import org.jetbrains.kotlin.utils.extractRadix
 import kotlin.math.abs
 
 
@@ -40,11 +42,13 @@ class ForConversion(context: NewJ2kConverterContext) : RecursiveApplicableConver
             else JKLiteralExpression("true", JKLiteralExpression.LiteralType.BOOLEAN)
         val whileStatement = JKWhileStatement(condition, whileBody)
 
-        if (loopStatement.initializer is JKEmptyStatement) return whileStatement
+        if (loopStatement.initializers.isEmpty()
+            || loopStatement.initializers.singleOrNull() is JKEmptyStatement
+        ) return whileStatement
 
         val convertedFromForLoopSyntheticWhileStatement =
             JKKtConvertedFromForLoopSyntheticWhileStatement(
-                loopStatement::initializer.detached(),
+                loopStatement::initializers.detached(),
                 whileStatement
             )
 
@@ -81,8 +85,7 @@ class ForConversion(context: NewJ2kConverterContext) : RecursiveApplicableConver
         val body = continueStatementConverter.applyToElement(loopStatement::body.detached())
 
         if (body is JKBlockStatement) {
-            val initializer = loopStatement.initializer
-            val hasNameConflict =
+            val hasNameConflict = loopStatement.initializers.any { initializer ->
                 initializer is JKDeclarationStatement && initializer.declaredStatements.any { loopVar ->
                     loopVar is JKLocalVariable && body.statements.any { statement ->
                         statement is JKDeclarationStatement && statement.declaredStatements.any {
@@ -90,6 +93,7 @@ class ForConversion(context: NewJ2kConverterContext) : RecursiveApplicableConver
                         }
                     }
                 }
+            }
 
             val statements =
                 if (hasNameConflict) {
@@ -106,18 +110,16 @@ class ForConversion(context: NewJ2kConverterContext) : RecursiveApplicableConver
     }
 
     private fun convertToForeach(loopStatement: JKJavaForLoopStatement): JKForInStatement? {
-        val loopVar =
-            (loopStatement.initializer as? JKDeclarationStatement)?.declaredStatements?.singleOrNull() as? JKLocalVariable ?: return null
+        val initializer = loopStatement.initializers.singleOrNull() ?: return null
+        val loopVar = (initializer as? JKDeclarationStatement)?.declaredStatements?.singleOrNull() as? JKLocalVariable ?: return null
         val loopVarPsi = loopVar.psi<PsiLocalVariable>() ?: return null
         val condition = loopStatement.condition as? JKBinaryExpression ?: return null
         if (!loopVarPsi.hasWriteAccesses(referenceSearcher, loopStatement.body.psi())
             && !loopVarPsi.hasWriteAccesses(referenceSearcher, loopStatement.condition.psi())
         ) {
             val left = condition.left as? JKFieldAccessExpression ?: return null
-            val right = condition::right.detached()
-            if (right.psi<PsiExpression>()?.type in listOf(PsiType.DOUBLE, PsiType.FLOAT, PsiType.CHAR)) return null
+            if (condition.right.psi<PsiExpression>()?.type in listOf(PsiType.DOUBLE, PsiType.FLOAT, PsiType.CHAR)) return null
             if (left.identifier.target != loopVar) return null
-            val start = loopVar::initializer.detached()
             val operationType =
                 (loopStatement.updaters.singleOrNull() as? JKExpressionStatement)?.expression?.isVariableIncrementOrDecrement(loopVar)
             val reversed = when (operationType?.token?.text) {
@@ -135,6 +137,8 @@ class ForConversion(context: NewJ2kConverterContext) : RecursiveApplicableConver
                 KtTokens.EXCLEQ -> false
                 else -> return null
             }
+            val start = loopVar::initializer.detached()
+            val right = condition::right.detached()
             val range = forIterationRange(start, right, reversed, inclusive)
             val explicitType =
                 if (context.converter.settings.specifyLocalVariableTypeByDefault)
@@ -198,8 +202,11 @@ class ForConversion(context: NewJ2kConverterContext) : RecursiveApplicableConver
         if (correction == 0) return bound
 
         if (bound is JKLiteralExpression && bound.type == JKLiteralExpression.LiteralType.INT) {
-            val value = bound.literal.toInt()
-            return JKLiteralExpression((value + correction).toString(), bound.type)
+            val correctedLiteral = addCorrectionToIntLiteral(bound.literal, correction)
+
+            if (correctedLiteral != null) {
+                return JKLiteralExpression(correctedLiteral, bound.type)
+            }
         }
 
         val sign = if (correction > 0) JKOperatorToken.PLUS else JKOperatorToken.MINUS
@@ -212,6 +219,25 @@ class ForConversion(context: NewJ2kConverterContext) : RecursiveApplicableConver
             )
         )
     }
+
+    private fun addCorrectionToIntLiteral(intLiteral: String, correction: Int): String? {
+        require(!intLiteral.startsWith("-")) { "This function does not work with signed literals, but $intLiteral was supplied" }
+
+        val numberWithRadix = extractRadix(intLiteral)
+
+        val value = numberWithRadix.number.toIntOrNull(numberWithRadix.radix) ?: return null
+        val fixedValue = (value + correction).toString(numberWithRadix.radix)
+
+        return "${numberWithRadix.radixPrefix}${fixedValue}"
+    }
+
+    private val NumberWithRadix.radixPrefix: String
+        get() = when (radix) {
+            2 -> "0b"
+            10 -> ""
+            16 -> "0x"
+            else -> error("Invalid radix for $this")
+        }
 
     private fun indicesIterationRange(
         start: JKExpression,
@@ -276,7 +302,7 @@ class ForConversion(context: NewJ2kConverterContext) : RecursiveApplicableConver
     }
 
     private fun JKJavaForLoopStatement.hasNameConflict(): Boolean {
-        val names = initializer.declaredVariableNames()
+        val names = initializers.flatMap { it.declaredVariableNames() }
         if (names.isEmpty()) return false
 
         val factory = PsiElementFactory.SERVICE.getInstance(context.project)
@@ -301,7 +327,7 @@ class ForConversion(context: NewJ2kConverterContext) : RecursiveApplicableConver
         when (this) {
             is JKDeclarationStatement ->
                 declaredStatements.filterIsInstance<JKVariable>().map { it.name.value }
-            is JKJavaForLoopStatement -> initializer.declaredVariableNames()
+            is JKJavaForLoopStatement -> initializers.flatMap { it.declaredVariableNames() }
             else -> emptyList()
         }
 

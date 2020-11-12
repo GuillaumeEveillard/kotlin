@@ -9,39 +9,55 @@ import org.gradle.api.DefaultTask
 import org.gradle.api.file.FileCollection
 import org.gradle.api.plugins.JavaPluginConvention
 import org.gradle.api.tasks.*
-import org.gradle.api.tasks.bundling.AbstractArchiveTask
-import org.gradle.jvm.tasks.Jar
 import org.jetbrains.kotlin.gradle.dsl.KotlinSingleJavaTargetExtension
 import org.jetbrains.kotlin.gradle.dsl.kotlinExtension
-import org.jetbrains.kotlin.gradle.utils.archivePathCompatible
+import org.jetbrains.kotlin.gradle.utils.isGradleVersionAtLeast
+import org.jetbrains.kotlin.gradle.utils.newProperty
 import java.io.File
 
 internal open class InspectClassesForMultiModuleIC : DefaultTask() {
-    @get:Internal
-    lateinit var jarTask: Jar
+    @get:Input
+    internal val archivePath = project.newProperty<String>()
+
+    @get:Input
+    internal val archiveName = project.newProperty<String>()
 
     @get:Input
     lateinit var sourceSetName: String
 
     @Suppress("MemberVisibilityCanBePrivate")
     @get:OutputFile
-    internal val classesListFile: File
-        get() = (project.kotlinExtension as KotlinSingleJavaTargetExtension).target.defaultArtifactClassesListFile
+    internal val classesListFile: File by lazy {
+        (project.kotlinExtension as KotlinSingleJavaTargetExtension).target.defaultArtifactClassesListFile.get()
+    }
+
+    @get:InputFiles
+    internal val sourceSetOutputClassesDir by lazy {
+        project.convention.findPlugin(JavaPluginConvention::class.java)?.sourceSets?.findByName(sourceSetName)?.output?.classesDirs
+    }
+
+    @get:Internal
+    internal val fileTrees
+        get() = sourceSetOutputClassesDir?.map {
+            if (isGradleVersionAtLeast(6, 0)) {
+                objects.fileTree().from(it).include("**/*.class")
+            } else {
+                project.fileTree(it).include("**/*.class")
+            }
+        }
+
+    @get:Internal
+    internal val objects = project.objects
 
     @Suppress("MemberVisibilityCanBePrivate")
     @get:InputFiles
     internal val classFiles: FileCollection
         get() {
-            val convention = project.convention.findPlugin(JavaPluginConvention::class.java)
-            val sourceSet = convention?.sourceSets?.findByName(sourceSetName) ?: return project.files()
-
-            val fileTrees = sourceSet.output.classesDirs.map { project.fileTree(it).include("**/*.class") }
-            return project.files(fileTrees)
+            if (sourceSetOutputClassesDir != null) {
+                return objects.fileCollection().from(fileTrees)
+            }
+            return objects.fileCollection()
         }
-
-    @get:Input
-    internal val archivePath: String
-        get() = jarTask.archivePathCompatible.canonicalPath
 
     @TaskAction
     fun run() {

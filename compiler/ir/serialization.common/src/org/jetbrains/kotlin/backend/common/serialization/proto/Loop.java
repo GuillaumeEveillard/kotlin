@@ -37,7 +37,7 @@ public final class Loop extends
         org.jetbrains.kotlin.protobuf.ByteString.newOutput();
     org.jetbrains.kotlin.protobuf.CodedOutputStream unknownFieldsCodedOutput =
         org.jetbrains.kotlin.protobuf.CodedOutputStream.newInstance(
-            unknownFieldsOutput);
+            unknownFieldsOutput, 1);
     try {
       boolean done = false;
       while (!done) {
@@ -71,17 +71,9 @@ public final class Loop extends
             bitField0_ |= 0x00000002;
             break;
           }
-          case 26: {
-            org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.Builder subBuilder = null;
-            if (((bitField0_ & 0x00000004) == 0x00000004)) {
-              subBuilder = label_.toBuilder();
-            }
-            label_ = input.readMessage(org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.PARSER, extensionRegistry);
-            if (subBuilder != null) {
-              subBuilder.mergeFrom(label_);
-              label_ = subBuilder.buildPartial();
-            }
+          case 24: {
             bitField0_ |= 0x00000004;
+            label_ = input.readInt32();
             break;
           }
           case 34: {
@@ -97,17 +89,9 @@ public final class Loop extends
             bitField0_ |= 0x00000008;
             break;
           }
-          case 42: {
-            org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin.Builder subBuilder = null;
-            if (((bitField0_ & 0x00000010) == 0x00000010)) {
-              subBuilder = origin_.toBuilder();
-            }
-            origin_ = input.readMessage(org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin.PARSER, extensionRegistry);
-            if (subBuilder != null) {
-              subBuilder.mergeFrom(origin_);
-              origin_ = subBuilder.buildPartial();
-            }
+          case 40: {
             bitField0_ |= 0x00000010;
+            originName_ = input.readInt32();
             break;
           }
         }
@@ -175,17 +159,17 @@ public final class Loop extends
   }
 
   public static final int LABEL_FIELD_NUMBER = 3;
-  private org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex label_;
+  private int label_;
   /**
-   * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex label = 3;</code>
+   * <code>optional int32 label = 3;</code>
    */
   public boolean hasLabel() {
     return ((bitField0_ & 0x00000004) == 0x00000004);
   }
   /**
-   * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex label = 3;</code>
+   * <code>optional int32 label = 3;</code>
    */
-  public org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex getLabel() {
+  public int getLabel() {
     return label_;
   }
 
@@ -204,27 +188,27 @@ public final class Loop extends
     return body_;
   }
 
-  public static final int ORIGIN_FIELD_NUMBER = 5;
-  private org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin origin_;
+  public static final int ORIGIN_NAME_FIELD_NUMBER = 5;
+  private int originName_;
   /**
-   * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin origin = 5;</code>
+   * <code>optional int32 origin_name = 5;</code>
    */
-  public boolean hasOrigin() {
+  public boolean hasOriginName() {
     return ((bitField0_ & 0x00000010) == 0x00000010);
   }
   /**
-   * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin origin = 5;</code>
+   * <code>optional int32 origin_name = 5;</code>
    */
-  public org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin getOrigin() {
-    return origin_;
+  public int getOriginName() {
+    return originName_;
   }
 
   private void initFields() {
     loopId_ = 0;
     condition_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrExpression.getDefaultInstance();
-    label_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.getDefaultInstance();
+    label_ = 0;
     body_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrExpression.getDefaultInstance();
-    origin_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin.getDefaultInstance();
+    originName_ = 0;
   }
   private byte memoizedIsInitialized = -1;
   public final boolean isInitialized() {
@@ -244,20 +228,8 @@ public final class Loop extends
       memoizedIsInitialized = 0;
       return false;
     }
-    if (hasLabel()) {
-      if (!getLabel().isInitialized()) {
-        memoizedIsInitialized = 0;
-        return false;
-      }
-    }
     if (hasBody()) {
       if (!getBody().isInitialized()) {
-        memoizedIsInitialized = 0;
-        return false;
-      }
-    }
-    if (hasOrigin()) {
-      if (!getOrigin().isInitialized()) {
         memoizedIsInitialized = 0;
         return false;
       }
@@ -276,13 +248,13 @@ public final class Loop extends
       output.writeMessage(2, condition_);
     }
     if (((bitField0_ & 0x00000004) == 0x00000004)) {
-      output.writeMessage(3, label_);
+      output.writeInt32(3, label_);
     }
     if (((bitField0_ & 0x00000008) == 0x00000008)) {
       output.writeMessage(4, body_);
     }
     if (((bitField0_ & 0x00000010) == 0x00000010)) {
-      output.writeMessage(5, origin_);
+      output.writeInt32(5, originName_);
     }
     output.writeRawBytes(unknownFields);
   }
@@ -303,7 +275,7 @@ public final class Loop extends
     }
     if (((bitField0_ & 0x00000004) == 0x00000004)) {
       size += org.jetbrains.kotlin.protobuf.CodedOutputStream
-        .computeMessageSize(3, label_);
+        .computeInt32Size(3, label_);
     }
     if (((bitField0_ & 0x00000008) == 0x00000008)) {
       size += org.jetbrains.kotlin.protobuf.CodedOutputStream
@@ -311,7 +283,7 @@ public final class Loop extends
     }
     if (((bitField0_ & 0x00000010) == 0x00000010)) {
       size += org.jetbrains.kotlin.protobuf.CodedOutputStream
-        .computeMessageSize(5, origin_);
+        .computeInt32Size(5, originName_);
     }
     size += unknownFields.size();
     memoizedSerializedSize = size;
@@ -411,11 +383,11 @@ public final class Loop extends
       bitField0_ = (bitField0_ & ~0x00000001);
       condition_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrExpression.getDefaultInstance();
       bitField0_ = (bitField0_ & ~0x00000002);
-      label_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.getDefaultInstance();
+      label_ = 0;
       bitField0_ = (bitField0_ & ~0x00000004);
       body_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrExpression.getDefaultInstance();
       bitField0_ = (bitField0_ & ~0x00000008);
-      origin_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin.getDefaultInstance();
+      originName_ = 0;
       bitField0_ = (bitField0_ & ~0x00000010);
       return this;
     }
@@ -459,7 +431,7 @@ public final class Loop extends
       if (((from_bitField0_ & 0x00000010) == 0x00000010)) {
         to_bitField0_ |= 0x00000010;
       }
-      result.origin_ = origin_;
+      result.originName_ = originName_;
       result.bitField0_ = to_bitField0_;
       return result;
     }
@@ -473,13 +445,13 @@ public final class Loop extends
         mergeCondition(other.getCondition());
       }
       if (other.hasLabel()) {
-        mergeLabel(other.getLabel());
+        setLabel(other.getLabel());
       }
       if (other.hasBody()) {
         mergeBody(other.getBody());
       }
-      if (other.hasOrigin()) {
-        mergeOrigin(other.getOrigin());
+      if (other.hasOriginName()) {
+        setOriginName(other.getOriginName());
       }
       setUnknownFields(
           getUnknownFields().concat(other.unknownFields));
@@ -499,20 +471,8 @@ public final class Loop extends
         
         return false;
       }
-      if (hasLabel()) {
-        if (!getLabel().isInitialized()) {
-          
-          return false;
-        }
-      }
       if (hasBody()) {
         if (!getBody().isInitialized()) {
-          
-          return false;
-        }
-      }
-      if (hasOrigin()) {
-        if (!getOrigin().isInitialized()) {
           
           return false;
         }
@@ -631,63 +591,35 @@ public final class Loop extends
       return this;
     }
 
-    private org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex label_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.getDefaultInstance();
+    private int label_ ;
     /**
-     * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex label = 3;</code>
+     * <code>optional int32 label = 3;</code>
      */
     public boolean hasLabel() {
       return ((bitField0_ & 0x00000004) == 0x00000004);
     }
     /**
-     * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex label = 3;</code>
+     * <code>optional int32 label = 3;</code>
      */
-    public org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex getLabel() {
+    public int getLabel() {
       return label_;
     }
     /**
-     * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex label = 3;</code>
+     * <code>optional int32 label = 3;</code>
      */
-    public Builder setLabel(org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex value) {
-      if (value == null) {
-        throw new NullPointerException();
-      }
+    public Builder setLabel(int value) {
+      bitField0_ |= 0x00000004;
       label_ = value;
-
-      bitField0_ |= 0x00000004;
+      
       return this;
     }
     /**
-     * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex label = 3;</code>
-     */
-    public Builder setLabel(
-        org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.Builder builderForValue) {
-      label_ = builderForValue.build();
-
-      bitField0_ |= 0x00000004;
-      return this;
-    }
-    /**
-     * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex label = 3;</code>
-     */
-    public Builder mergeLabel(org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex value) {
-      if (((bitField0_ & 0x00000004) == 0x00000004) &&
-          label_ != org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.getDefaultInstance()) {
-        label_ =
-          org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.newBuilder(label_).mergeFrom(value).buildPartial();
-      } else {
-        label_ = value;
-      }
-
-      bitField0_ |= 0x00000004;
-      return this;
-    }
-    /**
-     * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex label = 3;</code>
+     * <code>optional int32 label = 3;</code>
      */
     public Builder clearLabel() {
-      label_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.getDefaultInstance();
-
       bitField0_ = (bitField0_ & ~0x00000004);
+      label_ = 0;
+      
       return this;
     }
 
@@ -751,63 +683,35 @@ public final class Loop extends
       return this;
     }
 
-    private org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin origin_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin.getDefaultInstance();
+    private int originName_ ;
     /**
-     * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin origin = 5;</code>
+     * <code>optional int32 origin_name = 5;</code>
      */
-    public boolean hasOrigin() {
+    public boolean hasOriginName() {
       return ((bitField0_ & 0x00000010) == 0x00000010);
     }
     /**
-     * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin origin = 5;</code>
+     * <code>optional int32 origin_name = 5;</code>
      */
-    public org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin getOrigin() {
-      return origin_;
+    public int getOriginName() {
+      return originName_;
     }
     /**
-     * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin origin = 5;</code>
+     * <code>optional int32 origin_name = 5;</code>
      */
-    public Builder setOrigin(org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin value) {
-      if (value == null) {
-        throw new NullPointerException();
-      }
-      origin_ = value;
-
+    public Builder setOriginName(int value) {
       bitField0_ |= 0x00000010;
+      originName_ = value;
+      
       return this;
     }
     /**
-     * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin origin = 5;</code>
+     * <code>optional int32 origin_name = 5;</code>
      */
-    public Builder setOrigin(
-        org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin.Builder builderForValue) {
-      origin_ = builderForValue.build();
-
-      bitField0_ |= 0x00000010;
-      return this;
-    }
-    /**
-     * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin origin = 5;</code>
-     */
-    public Builder mergeOrigin(org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin value) {
-      if (((bitField0_ & 0x00000010) == 0x00000010) &&
-          origin_ != org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin.getDefaultInstance()) {
-        origin_ =
-          org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin.newBuilder(origin_).mergeFrom(value).buildPartial();
-      } else {
-        origin_ = value;
-      }
-
-      bitField0_ |= 0x00000010;
-      return this;
-    }
-    /**
-     * <code>optional .org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin origin = 5;</code>
-     */
-    public Builder clearOrigin() {
-      origin_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrStatementOrigin.getDefaultInstance();
-
+    public Builder clearOriginName() {
       bitField0_ = (bitField0_ & ~0x00000010);
+      originName_ = 0;
+      
       return this;
     }
 

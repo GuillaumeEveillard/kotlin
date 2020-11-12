@@ -34,15 +34,15 @@ class EqualityAndComparisonCallsTransformer(context: JsIrBackendContext) : Calls
 
             add(irBuiltIns.booleanNotSymbol, intrinsics.jsNot)
 
-            add(irBuiltIns.lessFunByOperandType.filterKeys { it != irBuiltIns.long }, intrinsics.jsLt)
-            add(irBuiltIns.lessOrEqualFunByOperandType.filterKeys { it != irBuiltIns.long }, intrinsics.jsLtEq)
-            add(irBuiltIns.greaterFunByOperandType.filterKeys { it != irBuiltIns.long }, intrinsics.jsGt)
-            add(irBuiltIns.greaterOrEqualFunByOperandType.filterKeys { it != irBuiltIns.long }, intrinsics.jsGtEq)
+            add(irBuiltIns.lessFunByOperandType.filterKeys { it != irBuiltIns.longClass }, intrinsics.jsLt)
+            add(irBuiltIns.lessOrEqualFunByOperandType.filterKeys { it != irBuiltIns.longClass }, intrinsics.jsLtEq)
+            add(irBuiltIns.greaterFunByOperandType.filterKeys { it != irBuiltIns.longClass }, intrinsics.jsGt)
+            add(irBuiltIns.greaterOrEqualFunByOperandType.filterKeys { it != irBuiltIns.longClass }, intrinsics.jsGtEq)
 
-            add(irBuiltIns.lessFunByOperandType[irBuiltIns.long]!!, transformLongComparison(intrinsics.jsLt))
-            add(irBuiltIns.lessOrEqualFunByOperandType[irBuiltIns.long]!!, transformLongComparison(intrinsics.jsLtEq))
-            add(irBuiltIns.greaterFunByOperandType[irBuiltIns.long]!!, transformLongComparison(intrinsics.jsGt))
-            add(irBuiltIns.greaterOrEqualFunByOperandType[irBuiltIns.long]!!, transformLongComparison(intrinsics.jsGtEq))
+            add(irBuiltIns.lessFunByOperandType[irBuiltIns.longClass]!!, transformLongComparison(intrinsics.jsLt))
+            add(irBuiltIns.lessOrEqualFunByOperandType[irBuiltIns.longClass]!!, transformLongComparison(intrinsics.jsLtEq))
+            add(irBuiltIns.greaterFunByOperandType[irBuiltIns.longClass]!!, transformLongComparison(intrinsics.jsGt))
+            add(irBuiltIns.greaterOrEqualFunByOperandType[irBuiltIns.longClass]!!, transformLongComparison(intrinsics.jsGtEq))
         }
     }
 
@@ -51,21 +51,23 @@ class EqualityAndComparisonCallsTransformer(context: JsIrBackendContext) : Calls
             call.startOffset,
             call.endOffset,
             comparator.owner.returnType,
-            comparator
+            comparator,
+            typeArgumentsCount = 0,
+            valueArgumentsCount = 2
         ).apply {
             putValueArgument(0, irCall(call, intrinsics.longCompareToLong, argumentsAsReceivers = true))
             putValueArgument(1, JsIrBuilder.buildInt(irBuiltIns.intType, 0))
         }
     }
 
-    override fun transformFunctionAccess(call: IrFunctionAccessExpression): IrExpression {
+    override fun transformFunctionAccess(call: IrFunctionAccessExpression, doNotIntrinsify: Boolean): IrExpression {
         val symbol = call.symbol
         symbolToTransformer[symbol]?.let {
             return it(call)
         }
 
         return when (symbol.owner.name) {
-            Name.identifier("compareTo") -> transformCompareToMethodCall(call)
+            Name.identifier("compareTo") -> if (doNotIntrinsify) call else transformCompareToMethodCall(call)
             Name.identifier("equals") -> transformEqualsMethodCall(call as IrCall)
             else -> call
         }
@@ -117,7 +119,7 @@ class EqualityAndComparisonCallsTransformer(context: JsIrBackendContext) : Calls
         if (function.parent !is IrClass) return call
 
         fun IrSimpleFunction.isFakeOverriddenFromComparable(): Boolean = when {
-            origin != IrDeclarationOrigin.FAKE_OVERRIDE ->
+            !isFakeOverride ->
                 !isStaticMethodOfClass && parentAsClass.thisReceiver!!.type.isComparable()
 
             else -> overriddenSymbols.all { it.owner.isFakeOverriddenFromComparable() }

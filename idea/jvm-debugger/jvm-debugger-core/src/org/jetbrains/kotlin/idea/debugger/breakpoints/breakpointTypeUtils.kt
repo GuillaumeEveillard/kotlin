@@ -1,17 +1,6 @@
 /*
- * Copyright 2010-2015 JetBrains s.r.o.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
 package org.jetbrains.kotlin.idea.debugger.breakpoints
@@ -23,10 +12,7 @@ import com.intellij.openapi.editor.Document
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import com.intellij.psi.PsiComment
-import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiManager
-import com.intellij.psi.PsiWhiteSpace
+import com.intellij.psi.*
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.xdebugger.XDebuggerUtil
 import com.intellij.xdebugger.XSourcePosition
@@ -34,13 +20,15 @@ import com.intellij.xdebugger.impl.XSourcePositionImpl
 import org.jetbrains.kotlin.idea.KotlinFileType
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.core.util.CodeInsightUtils
-import org.jetbrains.kotlin.idea.core.util.attachmentByPsiFile
 import org.jetbrains.kotlin.idea.core.util.getLineNumber
 import org.jetbrains.kotlin.idea.debugger.findElementAtLine
 import org.jetbrains.kotlin.idea.util.application.runReadAction
 import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
-import org.jetbrains.kotlin.psi.psiUtil.*
+import org.jetbrains.kotlin.psi.psiUtil.endOffset
+import org.jetbrains.kotlin.psi.psiUtil.getParentOfType
+import org.jetbrains.kotlin.psi.psiUtil.parentsWithSelf
+import org.jetbrains.kotlin.psi.psiUtil.startOffset
 import org.jetbrains.kotlin.resolve.BindingContext
 import org.jetbrains.kotlin.resolve.inline.INLINE_ONLY_ANNOTATION_FQ_NAME
 import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
@@ -48,8 +36,6 @@ import org.jetbrains.kotlin.utils.addToStdlib.firstIsInstance
 import java.util.*
 
 interface KotlinBreakpointType
-
-private val LOG = Logger.getInstance("BreakpointTypeUtilsKt")
 
 class ApplicabilityResult(val isApplicable: Boolean, val shouldStop: Boolean) {
     companion object {
@@ -86,26 +72,29 @@ fun isBreakpointApplicable(file: VirtualFile, line: Int, project: Project, check
         var isApplicable = false
         val checked = HashSet<PsiElement>()
 
-        XDebuggerUtil.getInstance().iterateLine(project, document, line, fun(element: PsiElement): Boolean {
-            if (element is PsiWhiteSpace || element.getParentOfType<PsiComment>(false) != null || !element.isValid) {
-                return true
-            }
+        XDebuggerUtil.getInstance().iterateLine(
+            project, document, line,
+            fun(element: PsiElement): Boolean {
+                if (element is PsiWhiteSpace || element.getParentOfType<PsiComment>(false) != null || !element.isValid) {
+                    return true
+                }
 
-            val parent = getTopmostParentOnLineOrSelf(element, document, line)
-            if (!checked.add(parent)) {
-                return true
-            }
+                val parent = getTopmostParentOnLineOrSelf(element, document, line)
+                if (!checked.add(parent)) {
+                    return true
+                }
 
-            val result = checker(parent)
+                val result = checker(parent)
 
-            if (result.shouldStop && !result.isApplicable) {
-                isApplicable = false
-                return false
-            }
+                if (result.shouldStop && !result.isApplicable) {
+                    isApplicable = false
+                    return false
+                }
 
-            isApplicable = isApplicable or result.isApplicable
-            return !result.shouldStop
-        })
+                isApplicable = isApplicable or result.isApplicable
+                return !result.shouldStop
+            },
+        )
 
         return@runReadAction isApplicable
     }
@@ -114,14 +103,9 @@ fun isBreakpointApplicable(file: VirtualFile, line: Int, project: Project, check
 private fun getTopmostParentOnLineOrSelf(element: PsiElement, document: Document, line: Int): PsiElement {
     var current = element
     var parent = current.parent
-    while (parent != null) {
+    while (parent != null && parent !is PsiFile) {
         val offset = parent.textOffset
-        if (offset > document.textLength) {
-            val containingFile = element.containingFile
-            val attachments = if (containingFile != null) arrayOf(attachmentByPsiFile(containingFile)) else emptyArray()
-            LOG.error("Wrong offset: $offset for line $line. Should be in range: [0, ${document.textLength}].", *attachments)
-            break
-        }
+        if (offset > document.textLength) break
         if (offset >= 0 && document.getLineNumber(offset) != line) break
 
         current = parent
@@ -134,7 +118,7 @@ private fun getTopmostParentOnLineOrSelf(element: PsiElement, document: Document
 fun computeLineBreakpointVariants(
     project: Project,
     position: XSourcePosition,
-    kotlinBreakpointType: KotlinLineBreakpointType
+    kotlinBreakpointType: KotlinLineBreakpointType,
 ): List<JavaLineBreakpointType.JavaBreakpointVariant> {
     val file = PsiManager.getInstance(project).findFile(position.file) as? KtFile ?: return emptyList()
 
@@ -187,12 +171,11 @@ fun getLambdasAtLineIfAny(file: KtFile, line: Int): List<KtFunction> {
     val start = lineElement.startOffset
     val end = lineElement.endOffset
 
-    val allLiterals = CodeInsightUtils.
-            findElementsOfClassInRange(file, start, end, KtFunction::class.java)
-            .filterIsInstance<KtFunction>()
-            // filter function literals and functional expressions
-            .filter { it is KtFunctionLiteral || it.name == null }
-            .toSet()
+    val allLiterals = CodeInsightUtils.findElementsOfClassInRange(file, start, end, KtFunction::class.java)
+        .filterIsInstance<KtFunction>()
+        // filter function literals and functional expressions
+        .filter { it is KtFunctionLiteral || it.name == null }
+        .toSet()
 
     return allLiterals.filter {
         val statement = it.bodyBlockExpression?.statements?.firstOrNull() ?: it

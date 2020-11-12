@@ -16,27 +16,18 @@
 
 package org.jetbrains.kotlin.ir.expressions.impl
 
-import org.jetbrains.kotlin.descriptors.ClassifierDescriptor
 import org.jetbrains.kotlin.ir.expressions.IrClassReference
 import org.jetbrains.kotlin.ir.symbols.IrClassifierSymbol
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.visitors.IrElementVisitor
 
 class IrClassReferenceImpl(
-    startOffset: Int,
-    endOffset: Int,
-    type: IrType,
-    symbol: IrClassifierSymbol,
-    override val classType: IrType
-) :
-    IrTerminalDeclarationReferenceBase<IrClassifierSymbol, ClassifierDescriptor>(
-        startOffset, endOffset, type,
-        symbol, symbol.descriptor
-    ),
-    IrClassReference {
-
-    override val descriptor: ClassifierDescriptor get() = symbol.descriptor
-
+    override val startOffset: Int,
+    override val endOffset: Int,
+    override var type: IrType,
+    override val symbol: IrClassifierSymbol,
+    override var classType: IrType
+) : IrClassReference() {
     override fun <R, D> accept(visitor: IrElementVisitor<R, D>, data: D): R =
         visitor.visitClassReference(this, data)
 }

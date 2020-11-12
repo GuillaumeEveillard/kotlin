@@ -6,56 +6,48 @@
 package org.jetbrains.kotlin.idea.refactoring.introduce.introduceImportAlias
 
 import com.intellij.openapi.actionSystem.DataContext
-import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
-import com.intellij.psi.PsiDocumentManager
-import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiFile
-import com.intellij.psi.PsiNamedElement
-import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.psi.*
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.refactoring.RefactoringActionHandler
 import com.intellij.refactoring.rename.inplace.VariableInplaceRenamer
-import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
+import org.jetbrains.annotations.TestOnly
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.caches.resolve.resolveImportReference
 import org.jetbrains.kotlin.idea.core.KotlinNameSuggester
-import org.jetbrains.kotlin.idea.core.util.CodeInsightUtils
 import org.jetbrains.kotlin.idea.core.moveCaret
+import org.jetbrains.kotlin.idea.core.util.CodeInsightUtils
 import org.jetbrains.kotlin.idea.imports.importableFqName
+import org.jetbrains.kotlin.idea.KotlinBundle
 import org.jetbrains.kotlin.idea.refactoring.selectElement
-import org.jetbrains.kotlin.idea.references.KtSimpleNameReference
+import org.jetbrains.kotlin.idea.references.KtReference
+import org.jetbrains.kotlin.idea.references.findPsiDeclarations
 import org.jetbrains.kotlin.idea.references.mainReference
 import org.jetbrains.kotlin.idea.references.resolveMainReferenceToDescriptors
 import org.jetbrains.kotlin.idea.search.fileScope
-import org.jetbrains.kotlin.idea.search.usagesSearch.isImportUsage
-import org.jetbrains.kotlin.idea.stubindex.KotlinFullClassNameIndex
-import org.jetbrains.kotlin.idea.stubindex.KotlinFunctionShortNameIndex
-import org.jetbrains.kotlin.idea.stubindex.KotlinPropertyShortNameIndex
+import org.jetbrains.kotlin.idea.search.isImportUsage
 import org.jetbrains.kotlin.idea.util.ImportInsertHelperImpl
 import org.jetbrains.kotlin.idea.util.getAllAccessibleFunctions
 import org.jetbrains.kotlin.idea.util.getAllAccessibleVariables
 import org.jetbrains.kotlin.idea.util.getResolutionScope
 import org.jetbrains.kotlin.incremental.components.NoLookupLocation
-import org.jetbrains.kotlin.js.resolve.diagnostics.findPsi
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
-import org.jetbrains.kotlin.psi.KtCallExpression
-import org.jetbrains.kotlin.psi.KtFile
-import org.jetbrains.kotlin.psi.KtNameReferenceExpression
-import org.jetbrains.kotlin.psi.KtUserType
+import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.*
-import org.jetbrains.kotlin.resolve.PropertyImportedFromObject
 import org.jetbrains.kotlin.resolve.descriptorUtil.isExtension
 import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
 import org.jetbrains.kotlin.resolve.scopes.utils.findClassifier
 import org.jetbrains.kotlin.resolve.scopes.utils.findPackage
-import org.jetbrains.kotlin.serialization.deserialization.descriptors.DeserializedClassDescriptor
-import org.jetbrains.kotlin.serialization.deserialization.descriptors.DeserializedSimpleFunctionDescriptor
+import org.jetbrains.kotlin.utils.addToStdlib.safeAs
+import org.jetbrains.kotlin.utils.checkWithAttachment
 
 object KotlinIntroduceImportAliasHandler : RefactoringActionHandler {
-    const val REFACTORING_NAME = "Introduce Import Alias"
+    val REFACTORING_NAME = KotlinBundle.message("name.introduce.import.alias")
+
+    @get:TestOnly
+    var suggestedImportAliasNames: Collection<String> = emptyList()
 
     fun doRefactoring(project: Project, editor: Editor, element: KtNameReferenceExpression) {
         val fqName = element.resolveMainReferenceToDescriptors().firstOrNull()?.importableFqName ?: return
@@ -66,10 +58,10 @@ object KotlinIntroduceImportAliasHandler : RefactoringActionHandler {
         val resolveScope = file.resolveScope
         val usages = declarationDescriptors.flatMap { descriptor ->
             val isExtension = descriptor.isExtension
-            findPsiElements(project, resolveScope, descriptor).flatMap {
+            descriptor.findPsiDeclarations(project, resolveScope).flatMap {
                 ReferencesSearch.search(it, fileSearchScope)
                     .findAll()
-                    .map { reference -> UsageContext(reference as KtSimpleNameReference, isExtension = isExtension) }
+                    .map { reference -> UsageContext(reference.element.createSmartPointer(), isExtension = isExtension) }
             }
         }
 
@@ -77,7 +69,7 @@ object KotlinIntroduceImportAliasHandler : RefactoringActionHandler {
 
         val oldName = element.mainReference.value
         val scopes = usages.mapNotNull {
-            val expression = it.reference.element
+            val expression = it.pointer.element as? KtElement ?: return@mapNotNull null
             expression.getResolutionScope(expression.analyze(BodyResolveMode.PARTIAL_FOR_COMPLETION))
         }.distinct()
 
@@ -93,8 +85,15 @@ object KotlinIntroduceImportAliasHandler : RefactoringActionHandler {
             }
         }
 
-        val suggestionsName = KotlinNameSuggester.suggestNamesByFqName(fqName, validator = validator)
+        val suggestionsName = KotlinNameSuggester.suggestNamesByFqName(
+            fqName,
+            validator = validator,
+            defaultName = { fqName.asString().replace('.', '_') })
+        checkWithAttachment(suggestionsName.isNotEmpty(), { "Unable to build any suggestion name for $fqName" }) {
+            it.withAttachment("file.kt", file.text)
+        }
         val newName = suggestionsName.first()
+        suggestedImportAliasNames = suggestionsName
         val newDirective = ImportInsertHelperImpl.addImport(project, file, fqName, false, Name.identifier(newName))
 
         replaceUsages(usages, newName)
@@ -102,9 +101,7 @@ object KotlinIntroduceImportAliasHandler : RefactoringActionHandler {
 
         if (elementInImportDirective) editor.moveCaret(newDirective.alias?.nameIdentifier?.textOffset ?: newDirective.endOffset)
 
-        if (!ApplicationManager.getApplication().isUnitTestMode) {
-            invokeRename(project, editor, newDirective.alias, suggestionsName)
-        }
+        invokeRename(project, editor, newDirective.alias, suggestionsName)
     }
 
     override fun invoke(project: Project, editor: Editor, file: PsiFile, dataContext: DataContext?) {
@@ -119,21 +116,10 @@ object KotlinIntroduceImportAliasHandler : RefactoringActionHandler {
     }
 }
 
-private data class UsageContext(val reference: KtSimpleNameReference, val isExtension: Boolean)
+private data class UsageContext(val pointer: SmartPsiElementPointer<PsiElement>, val isExtension: Boolean)
 
 private fun cleanImport(file: KtFile, fqName: FqName) {
     file.importDirectives.find { it.alias == null && fqName == it.importedFqName }?.delete()
-}
-
-private fun findPsiElements(project: Project, resolveScope: GlobalSearchScope, descriptor: DeclarationDescriptor): Collection<PsiElement> {
-    descriptor.findPsi()?.let { return listOf(it) }
-    val fqName = descriptor.importableFqName ?: return emptyList()
-    return when (descriptor) {
-        is DeserializedClassDescriptor -> KotlinFullClassNameIndex.getInstance()[fqName.asString(), project, resolveScope]
-        is DeserializedSimpleFunctionDescriptor -> KotlinFunctionShortNameIndex.getInstance()[fqName.shortName().asString(), project, resolveScope]
-        is PropertyImportedFromObject -> KotlinPropertyShortNameIndex.getInstance()[fqName.shortName().asString(), project, resolveScope]
-        else -> emptyList()
-    }.filter { fqName == it.fqName }
 }
 
 private fun invokeRename(
@@ -148,22 +134,22 @@ private fun invokeRename(
 }
 
 private fun replaceUsages(usages: List<UsageContext>, newName: String) {
-    usages.filter { !it.reference.isImportUsage() }
-        .reversed() // case: inner element
-        .forEach {
-            val newExpression = it.reference.handleElementRename(newName) as KtNameReferenceExpression
-            if (it.isExtension) {
-                newExpression.getQualifiedElementSelector()?.replace(newExpression)
-                return@forEach
-            }
-
-            val qualifiedElement = newExpression.getQualifiedElement()
-            if (qualifiedElement != newExpression) {
-                val parent = newExpression.parent
-                if (parent is KtCallExpression || parent is KtUserType) {
-                    newExpression.siblings(forward = false, withItself = false).forEach(PsiElement::delete)
-                    qualifiedElement.replace(parent)
-                } else qualifiedElement.replace(newExpression)
-            }
+    // case: inner element
+    for (usage in usages.asReversed()) {
+        val reference = usage.pointer.element?.safeAs<KtElement>()?.mainReference?.takeUnless { it.isImportUsage() } ?: continue
+        val newExpression = reference.handleElementRename(newName) as? KtNameReferenceExpression ?: continue
+        if (usage.isExtension) {
+            newExpression.getQualifiedElementSelector()?.replace(newExpression)
+            continue
         }
+
+        val qualifiedElement = newExpression.getQualifiedElement()
+        if (qualifiedElement != newExpression) {
+            val parent = newExpression.parent
+            if (parent is KtCallExpression || parent is KtUserType) {
+                newExpression.siblings(forward = false, withItself = false).forEach(PsiElement::delete)
+                qualifiedElement.replace(parent)
+            } else qualifiedElement.replace(newExpression)
+        }
+    }
 }

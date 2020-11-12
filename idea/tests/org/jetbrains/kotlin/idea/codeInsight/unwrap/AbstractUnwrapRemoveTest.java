@@ -19,6 +19,7 @@ import org.jetbrains.kotlin.test.InTextDirectivesUtils;
 import java.io.File;
 import java.util.List;
 
+@SuppressWarnings("deprecation")
 public abstract class AbstractUnwrapRemoveTest extends LightCodeInsightTestCase {
     public void doTestExpressionRemover(@NotNull String path) throws Exception {
         doTest(path, KotlinUnwrappers.KotlinExpressionRemover.class);

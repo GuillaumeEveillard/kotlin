@@ -38,8 +38,8 @@ public abstract class AbstractScriptCodegenTest extends CodegenTestCase {
 
     @Override
     protected void updateConfiguration(@NotNull CompilerConfiguration configuration) {
-        loadScriptingPlugin(configuration);
         super.updateConfiguration(configuration);
+        loadScriptingPlugin(configuration);
     }
 
     @Override

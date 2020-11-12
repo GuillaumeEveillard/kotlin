@@ -10,7 +10,8 @@ import junit.framework.TestCase
 import org.jetbrains.kotlin.cli.common.CLIConfigurationKeys
 import org.jetbrains.kotlin.cli.common.ExitCode
 import org.jetbrains.kotlin.cli.common.config.addKotlinSourceRoots
-import org.jetbrains.kotlin.cli.common.messages.CompilerMessageLocation
+import org.jetbrains.kotlin.cli.common.environment.setIdeaIoUseFallback
+import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSourceLocation
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import org.jetbrains.kotlin.cli.jvm.K2JVMCompiler
@@ -43,13 +44,16 @@ class ScriptingCompilerPluginTest : TestCase() {
         const val TEST_DATA_DIR = "plugins/scripting/scripting-compiler/testData"
     }
 
+    init {
+        setIdeaIoUseFallback()
+    }
+
     private val kotlinPaths: KotlinPaths by lazy(LazyThreadSafetyMode.PUBLICATION) {
         val paths = PathUtil.kotlinPathsForDistDirectory
         TestCase.assertTrue("Lib directory doesn't exist. Run 'ant dist'", paths.libPath.absoluteFile.isDirectory)
         paths
     }
 
-    val compilerClasspath = listOf(kotlinPaths.compilerPath)
     val runtimeClasspath = listOf( kotlinPaths.stdlibPath, kotlinPaths.scriptRuntimePath, kotlinPaths.reflectPath)
     val scriptingClasspath = listOf("kotlin-scripting-common.jar").map { File(kotlinPaths.libPath, it) }
 
@@ -244,7 +248,7 @@ class ScriptingCompilerPluginTest : TestCase() {
 
 
 class TestMessageCollector : MessageCollector {
-    data class Message(val severity: CompilerMessageSeverity, val message: String, val location: CompilerMessageLocation?)
+    data class Message(val severity: CompilerMessageSeverity, val message: String, val location: CompilerMessageSourceLocation?)
 
     val messages = arrayListOf<Message>()
 
@@ -252,7 +256,7 @@ class TestMessageCollector : MessageCollector {
         messages.clear()
     }
 
-    override fun report(severity: CompilerMessageSeverity, message: String, location: CompilerMessageLocation?) {
+    override fun report(severity: CompilerMessageSeverity, message: String, location: CompilerMessageSourceLocation?) {
         messages.add(Message(severity, message, location))
     }
 

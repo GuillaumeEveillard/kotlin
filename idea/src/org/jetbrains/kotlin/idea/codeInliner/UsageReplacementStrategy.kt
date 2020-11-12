@@ -1,22 +1,12 @@
 /*
- * Copyright 2010-2016 JetBrains s.r.o.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
 package org.jetbrains.kotlin.idea.codeInliner
 
 import com.intellij.openapi.application.ModalityState
+import com.intellij.openapi.diagnostic.ControlFlowException
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
@@ -34,7 +24,7 @@ import org.jetbrains.kotlin.idea.caches.resolve.resolveToDescriptorIfAny
 import org.jetbrains.kotlin.idea.core.targetDescriptors
 import org.jetbrains.kotlin.idea.intentions.ConvertReferenceToLambdaIntention
 import org.jetbrains.kotlin.idea.intentions.SpecifyExplicitLambdaSignatureIntention
-import org.jetbrains.kotlin.idea.references.KtSimpleNameReference
+import org.jetbrains.kotlin.idea.references.KtSimpleReference
 import org.jetbrains.kotlin.idea.search.usagesSearch.descriptor
 import org.jetbrains.kotlin.idea.stubindex.KotlinSourceFilterScope
 import org.jetbrains.kotlin.idea.util.application.executeWriteCommand
@@ -45,7 +35,7 @@ import org.jetbrains.kotlin.psi.psiUtil.forEachDescendantOfType
 import org.jetbrains.kotlin.psi.psiUtil.getStrictParentOfType
 
 interface UsageReplacementStrategy {
-    fun createReplacer(usage: KtSimpleNameExpression): (() -> KtElement?)?
+    fun createReplacer(usage: KtReferenceExpression): (() -> KtElement?)?
 }
 
 private val LOG = Logger.getInstance(UsageReplacementStrategy::class.java)
@@ -63,7 +53,7 @@ fun UsageReplacementStrategy.replaceUsagesInWholeProject(
                 val usages = runReadAction {
                     val searchScope = KotlinSourceFilterScope.projectSources(GlobalSearchScope.projectScope(project), project)
                     ReferencesSearch.search(targetPsiElement, searchScope)
-                        .filterIsInstance<KtSimpleNameReference>()
+                        .filterIsInstance<KtSimpleReference<KtReferenceExpression>>()
                         .map { ref -> ref.expression }
                 }
                 this@replaceUsagesInWholeProject.replaceUsages(usages, targetPsiElement, project, commandName, postAction)
@@ -72,7 +62,7 @@ fun UsageReplacementStrategy.replaceUsagesInWholeProject(
 }
 
 fun UsageReplacementStrategy.replaceUsages(
-    usages: Collection<KtSimpleNameExpression>,
+    usages: Collection<KtReferenceExpression>,
     targetPsiElement: PsiElement,
     project: Project,
     commandName: String,
@@ -114,7 +104,7 @@ fun UsageReplacementStrategy.replaceUsages(
  * @return false if some usages were invalidated
  */
 private fun UsageReplacementStrategy.processUsages(
-    usages: List<KtSimpleNameExpression>,
+    usages: List<KtReferenceExpression>,
     targetDeclaration: KtNamedDeclaration?,
     importsToDelete: MutableList<KtImportDirective>
 ): Boolean {
@@ -126,7 +116,7 @@ private fun UsageReplacementStrategy.processUsages(
                 continue
             }
 
-            if (specialUsageProcessing(usage, targetDeclaration)) continue
+            if (usage is KtSimpleNameExpression && specialUsageProcessing(usage, targetDeclaration)) continue
 
             //TODO: keep the import if we don't know how to replace some of the usages
             val importDirective = usage.getStrictParentOfType<KtImportDirective>()
@@ -139,6 +129,7 @@ private fun UsageReplacementStrategy.processUsages(
 
             createReplacer(usage)?.invoke()
         } catch (e: Throwable) {
+            if (e is ControlFlowException) throw e
             LOG.error(e)
         }
     }
@@ -151,6 +142,7 @@ private fun UsageReplacementStrategy.specialUsageProcessing(
 ): Boolean {
     when (val usageParent = usage.parent) {
         is KtCallableReferenceExpression -> {
+            if (usageParent.callableReference != usage) return false
             val grandParent = usageParent.parent
             ConvertReferenceToLambdaIntention().applyTo(usageParent, null)
             (grandParent as? KtElement)?.let {

@@ -1,15 +1,20 @@
 /*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
 package org.jetbrains.kotlin.gradle.targets.js.subtargets
 
 import org.gradle.api.NamedDomainObjectContainer
+import org.gradle.api.Task
 import org.gradle.api.plugins.ExtensionAware
+import org.gradle.api.tasks.TaskProvider
 import org.gradle.language.base.plugins.LifecycleBasePlugin
-import org.jetbrains.kotlin.gradle.plugin.*
+import org.jetbrains.kotlin.gradle.plugin.AbstractKotlinTargetConfigurator
+import org.jetbrains.kotlin.gradle.plugin.KotlinCompilation
+import org.jetbrains.kotlin.gradle.plugin.KotlinTargetWithTests
 import org.jetbrains.kotlin.gradle.plugin.mpp.KotlinJsCompilation
+import org.jetbrains.kotlin.gradle.plugin.mpp.isMain
 import org.jetbrains.kotlin.gradle.plugin.whenEvaluated
 import org.jetbrains.kotlin.gradle.targets.js.KotlinJsPlatformTestRun
 import org.jetbrains.kotlin.gradle.targets.js.KotlinJsTarget
@@ -28,31 +33,46 @@ abstract class KotlinJsSubTarget(
     private val disambiguationClassifier: String
 ) : KotlinJsSubTargetDsl {
     val project get() = target.project
+
     private val nodeJs = NodeJsRootPlugin.apply(project.rootProject)
 
-    val runTaskName = disambiguateCamelCased("run")
-    val testTaskName = disambiguateCamelCased("test")
+    abstract val testTaskDescription: String
 
     final override lateinit var testRuns: NamedDomainObjectContainer<KotlinJsPlatformTestRun>
         private set
 
-    fun configure() {
+    protected val taskGroupName = "Kotlin $disambiguationClassifier"
+
+    private val produceExecutable: Unit by lazy {
+        configureMain()
+    }
+
+    internal fun produceExecutable() {
+        produceExecutable
+    }
+
+    internal fun configure() {
         NpmResolverPlugin.apply(project)
 
         configureTests()
-        configureRun()
 
         target.compilations.all {
             val npmProject = it.npmProject
-            it.compileKotlinTask.kotlinOptions.outputFile = npmProject.dir.resolve(npmProject.main).canonicalPath
+            it.kotlinOptions {
+                outputFile = npmProject.dir.resolve(npmProject.main).canonicalPath
+            }
         }
     }
 
-    protected fun disambiguateCamelCased(name: String): String =
-        lowerCamelCaseName(target.disambiguationClassifier, disambiguationClassifier, name)
+    override fun testTask(body: KotlinJsTest.() -> Unit) {
+        testRuns.getByName(KotlinTargetWithTests.DEFAULT_TEST_RUN_NAME).executionTask.configure(body)
+    }
+
+    protected fun disambiguateCamelCased(vararg names: String): String =
+        lowerCamelCaseName(target.disambiguationClassifier, disambiguationClassifier, *names)
 
     private fun configureTests() {
-        testRuns = project.container(KotlinJsPlatformTestRun::class.java) { name -> KotlinJsPlatformTestRun(name, this) }.also {
+        testRuns = project.container(KotlinJsPlatformTestRun::class.java) { name -> KotlinJsPlatformTestRun(name, target) }.also {
             (this as ExtensionAware).extensions.add(this::testRuns.name, it)
         }
 
@@ -66,8 +86,6 @@ abstract class KotlinJsSubTarget(
         }
     }
 
-    abstract val testTaskDescription: String
-
     private fun configureTestsRun(testRun: KotlinJsPlatformTestRun, compilation: KotlinJsCompilation) {
         fun KotlinJsPlatformTestRun.subtargetTestTaskName(): String = disambiguateCamelCased(
             lowerCamelCaseName(
@@ -76,19 +94,24 @@ abstract class KotlinJsSubTarget(
             )
         )
 
-        val testJs = project.registerTask<KotlinJsTest>(testRun.subtargetTestTaskName()) { testJs ->
-            val compileTask = compilation.compileKotlinTask
+        val testJs = project.registerTask<KotlinJsTest>(
+            testRun.subtargetTestTaskName(),
+            listOf(compilation)
+        ) { testJs ->
+            val compileTask = compilation.compileKotlinTaskProvider
 
             testJs.group = LifecycleBasePlugin.VERIFICATION_GROUP
             testJs.description = testTaskDescription
 
-            testJs.dependsOn(nodeJs.npmInstallTask, compileTask, nodeJs.nodeJsSetupTask)
+            val compileOutputFile = compileTask.map { it.outputFile }
+            testJs.inputFileProperty.set(project.layout.file(compileOutputFile))
+
+            testJs.dependsOn(nodeJs.npmInstallTaskProvider, compileTask, nodeJs.nodeJsSetupTaskProvider)
 
             testJs.onlyIf {
-                compileTask.outputFile.exists()
+                compileOutputFile.get().exists()
             }
 
-            testJs.compilation = compilation
             testJs.targetName = listOfNotNull(target.disambiguationClassifier, disambiguationClassifier)
                 .takeIf { it.isNotEmpty() }
                 ?.joinToString()
@@ -110,23 +133,37 @@ abstract class KotlinJsSubTarget(
                 if (it.testFramework == null) {
                     configureDefaultTestFramework(it)
                 }
+
+                if (it.enabled) {
+                    nodeJs.taskRequirements.addTaskRequirements(it)
+                }
             }
         }
     }
 
-    protected abstract fun configureDefaultTestFramework(it: KotlinJsTest)
+    protected abstract fun configureDefaultTestFramework(testTask: KotlinJsTest)
 
-    fun configureRun() {
+    private fun configureMain() {
         target.compilations.all { compilation ->
-            if (compilation.name == KotlinCompilation.MAIN_COMPILATION_NAME) {
-                configureRun(compilation)
+            if (compilation.isMain()) {
+                configureMain(compilation)
             }
         }
     }
 
-    protected abstract fun configureRun(compilation: KotlinJsCompilation)
+    protected abstract fun configureMain(compilation: KotlinJsCompilation)
 
-    override fun testTask(body: KotlinJsTest.() -> Unit) {
-        testRuns.getByName(KotlinTargetWithTests.DEFAULT_TEST_RUN_NAME).executionTask.configure(body)
+    internal inline fun <reified T : Task> registerSubTargetTask(
+        name: String,
+        args: List<Any> = emptyList(),
+        noinline body: (T) -> (Unit)
+    ): TaskProvider<T> =
+        project.registerTask(name, args) {
+            it.group = taskGroupName
+            body(it)
+        }
+
+    companion object {
+        const val RUN_TASK_NAME = "run"
     }
 }

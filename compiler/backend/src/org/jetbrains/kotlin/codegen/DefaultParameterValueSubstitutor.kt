@@ -17,14 +17,17 @@
 package org.jetbrains.kotlin.codegen
 
 import org.jetbrains.kotlin.codegen.JvmCodegenUtil.getDispatchReceiverParameterForConstructorCall
+import org.jetbrains.kotlin.codegen.JvmCodegenUtil.isJvmInterface
 import org.jetbrains.kotlin.codegen.binding.CodegenBinding
 import org.jetbrains.kotlin.codegen.state.GenerationState
+import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.descriptors.*
 import org.jetbrains.kotlin.psi.KtClass
 import org.jetbrains.kotlin.psi.KtParameter
 import org.jetbrains.kotlin.psi.KtPureClassOrObject
 import org.jetbrains.kotlin.psi.KtPureElement
 import org.jetbrains.kotlin.resolve.DescriptorToSourceUtils
+import org.jetbrains.kotlin.resolve.DescriptorUtils.isInterface
 import org.jetbrains.kotlin.resolve.calls.components.hasDefaultValue
 import org.jetbrains.kotlin.resolve.isInlineClass
 import org.jetbrains.kotlin.resolve.jvm.AsmTypes
@@ -126,16 +129,20 @@ class DefaultParameterValueSubstitutor(val state: GenerationState) {
         substituteCount: Int
     ) {
         val typeMapper = state.typeMapper
-        val isStatic = AsmUtil.isStaticMethod(contextKind, functionDescriptor)
-        val baseMethodFlags = AsmUtil.getCommonCallableFlags(functionDescriptor, state) and Opcodes.ACC_VARARGS.inv()
+        val isStatic = DescriptorAsmUtil.isStaticMethod(contextKind, functionDescriptor)
+        val baseMethodFlags = DescriptorAsmUtil.getCommonCallableFlags(functionDescriptor, state) and Opcodes.ACC_VARARGS.inv()
         val remainingParameters = getRemainingParameters(functionDescriptor.original, substituteCount)
         val remainingParametersDeclarations =
             remainingParameters.map { DescriptorToSourceUtils.descriptorToDeclaration(it) as? KtParameter }
 
+        val generateAsFinal =
+            (functionDescriptor.modality == Modality.FINAL ||
+                    state.languageVersionSettings.supportsFeature(LanguageFeature.GenerateJvmOverloadsAsFinal)) &&
+                    !isJvmInterface(functionDescriptor.containingDeclaration)
         val flags =
             baseMethodFlags or
                     (if (isStatic) Opcodes.ACC_STATIC else 0) or
-                    (if (functionDescriptor.modality == Modality.FINAL && functionDescriptor !is ConstructorDescriptor) Opcodes.ACC_FINAL else 0) or
+                    (if (generateAsFinal && functionDescriptor !is ConstructorDescriptor) Opcodes.ACC_FINAL else 0) or
                     (if (remainingParameters.lastOrNull()?.varargElementType != null) Opcodes.ACC_VARARGS else 0)
         val signature = typeMapper.mapSignatureWithCustomParameters(functionDescriptor, contextKind, remainingParameters, false)
         val mv = classBuilder.newMethod(
@@ -149,14 +156,18 @@ class DefaultParameterValueSubstitutor(val state: GenerationState) {
             signature.genericsSignature,
             FunctionCodegen.getThrownExceptions(functionDescriptor, typeMapper)
         )
+        val skipNullabilityAnnotations = flags and Opcodes.ACC_PRIVATE != 0 || flags and Opcodes.ACC_SYNTHETIC != 0
 
-        AnnotationCodegen.forMethod(mv, memberCodegen, state).genAnnotations(functionDescriptor, signature.returnType)
+        AnnotationCodegen.forMethod(mv, memberCodegen, state, skipNullabilityAnnotations)
+            .genAnnotations(functionDescriptor, signature.returnType, functionDescriptor.returnType)
 
         if (state.classBuilderMode == ClassBuilderMode.KAPT3) {
             mv.visitAnnotation(ANNOTATION_TYPE_DESCRIPTOR_FOR_JVM_OVERLOADS_GENERATED_METHODS, false)
         }
 
-        FunctionCodegen.generateParameterAnnotations(functionDescriptor, mv, signature, remainingParameters, memberCodegen, state)
+        FunctionCodegen.generateParameterAnnotations(
+            functionDescriptor, mv, signature, remainingParameters, memberCodegen, state, skipNullabilityAnnotations
+        )
 
         if (!state.classBuilderMode.generateBodies) {
             FunctionCodegen.generateLocalVariablesForParameters(
@@ -260,7 +271,7 @@ class DefaultParameterValueSubstitutor(val state: GenerationState) {
 
         if (CodegenBinding.canHaveOuter(state.bindingContext, classDescriptor)) return false
 
-        if (Visibilities.isPrivate(constructorDescriptor.visibility)) return false
+        if (DescriptorVisibilities.isPrivate(constructorDescriptor.visibility)) return false
 
         if (constructorDescriptor.valueParameters.isEmpty()) return false
         if (classOrObject is KtClass && hasSecondaryConstructorsWithNoParameters(classOrObject)) return false

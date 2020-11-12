@@ -1,6 +1,4 @@
-// !LANGUAGE: +NewInference
 // TARGET_BACKEND: JVM
-
 // FILE: example/Hello.java
 
 package example;

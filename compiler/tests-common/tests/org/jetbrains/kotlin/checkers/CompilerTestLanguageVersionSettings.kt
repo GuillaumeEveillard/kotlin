@@ -7,6 +7,7 @@ package org.jetbrains.kotlin.checkers
 
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
 import org.jetbrains.kotlin.config.*
+import org.jetbrains.kotlin.test.Directives
 import org.jetbrains.kotlin.test.KotlinTestUtils
 import org.junit.Assert
 import java.io.File
@@ -50,10 +51,10 @@ private fun specificFeaturesForTests(): Map<LanguageFeature, LanguageFeature.Sta
         emptyMap()
 }
 
-fun parseLanguageVersionSettingsOrDefault(directiveMap: Map<String, String>): CompilerTestLanguageVersionSettings =
+fun parseLanguageVersionSettingsOrDefault(directiveMap: Directives): CompilerTestLanguageVersionSettings =
     parseLanguageVersionSettings(directiveMap) ?: defaultLanguageVersionSettings()
 
-fun parseLanguageVersionSettings(directives: Map<String, String>): CompilerTestLanguageVersionSettings? {
+fun parseLanguageVersionSettings(directives: Directives): CompilerTestLanguageVersionSettings? {
     val apiVersionString = directives[API_VERSION_DIRECTIVE]
     val languageFeaturesString = directives[LANGUAGE_DIRECTIVE]
 
@@ -92,12 +93,16 @@ fun parseLanguageVersionSettings(directives: Map<String, String>): CompilerTestL
 fun defaultLanguageVersionSettings(): CompilerTestLanguageVersionSettings =
     CompilerTestLanguageVersionSettings(emptyMap(), ApiVersion.LATEST_STABLE, LanguageVersion.LATEST_STABLE)
 
-fun setupLanguageVersionSettingsForMultifileCompilerTests(files: List<File>, environment: KotlinCoreEnvironment) {
-    val allDirectives = HashMap<String, String>()
-    for (file in files) {
-        allDirectives.putAll(KotlinTestUtils.parseDirectives(file.readText()))
+fun languageVersionSettingsFromText(fileTexts: List<String>): LanguageVersionSettings {
+    val allDirectives = Directives()
+    for (fileText in fileTexts) {
+        KotlinTestUtils.parseDirectives(fileText, allDirectives)
     }
-    environment.configuration.languageVersionSettings = parseLanguageVersionSettingsOrDefault(allDirectives)
+    return parseLanguageVersionSettingsOrDefault(allDirectives)
+}
+
+fun setupLanguageVersionSettingsForMultifileCompilerTests(files: List<File>, environment: KotlinCoreEnvironment) {
+    environment.configuration.languageVersionSettings = languageVersionSettingsFromText(files.map { it.readText() })
 }
 
 fun setupLanguageVersionSettingsForCompilerTests(originalFileText: String, environment: KotlinCoreEnvironment) {

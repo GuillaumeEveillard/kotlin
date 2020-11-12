@@ -26,7 +26,6 @@ import kotlin.Pair;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns;
-import org.jetbrains.kotlin.config.LanguageFeature;
 import org.jetbrains.kotlin.config.LanguageVersionSettings;
 import org.jetbrains.kotlin.descriptors.*;
 import org.jetbrains.kotlin.descriptors.annotations.Annotations;
@@ -53,8 +52,9 @@ import org.jetbrains.kotlin.resolve.calls.tasks.ExplicitReceiverKind;
 import org.jetbrains.kotlin.resolve.calls.tasks.ResolutionCandidate;
 import org.jetbrains.kotlin.resolve.calls.tasks.TracingStrategy;
 import org.jetbrains.kotlin.resolve.calls.util.CallMaker;
-import org.jetbrains.kotlin.resolve.descriptorUtil.AnnotationsForResolveKt;
+import org.jetbrains.kotlin.resolve.descriptorUtil.AnnotationsForResolveUtilsKt;
 import org.jetbrains.kotlin.resolve.scopes.receivers.ReceiverValue;
+import org.jetbrains.kotlin.storage.StorageManager;
 import org.jetbrains.kotlin.types.*;
 import org.jetbrains.kotlin.types.typeUtil.TypeUtilsKt;
 
@@ -97,15 +97,18 @@ public class ControlStructureTypingUtils {
     private final CallResolver callResolver;
     private final DataFlowAnalyzer dataFlowAnalyzer;
     private final ModuleDescriptor moduleDescriptor;
+    private final StorageManager storageManager;
 
     public ControlStructureTypingUtils(
             @NotNull CallResolver callResolver,
             @NotNull DataFlowAnalyzer dataFlowAnalyzer,
-            @NotNull ModuleDescriptor moduleDescriptor
+            @NotNull ModuleDescriptor moduleDescriptor,
+            @NotNull StorageManager storageManager
     ) {
         this.callResolver = callResolver;
         this.dataFlowAnalyzer = dataFlowAnalyzer;
         this.moduleDescriptor = moduleDescriptor;
+        this.storageManager = storageManager;
     }
 
     /*package*/ ResolvedCall<FunctionDescriptor> resolveSpecialConstructionAsCall(
@@ -173,8 +176,7 @@ public class ControlStructureTypingUtils {
             @NotNull KotlinType expectedType,
             @NotNull LanguageVersionSettings languageVersionSettings
     ) {
-        if (languageVersionSettings.supportsFeature(LanguageFeature.NewInference)
-            || construct == ResolveConstruct.ELVIS
+        if (construct == ResolveConstruct.ELVIS
             || TypeUtils.noExpectedType(expectedType)
             || TypeUtils.isDontCarePlaceholder(expectedType)
             || KotlinBuiltIns.isUnitOrNullableUnit(expectedType)
@@ -202,7 +204,7 @@ public class ControlStructureTypingUtils {
 
         TypeParameterDescriptor typeParameter = TypeParameterDescriptorImpl.createWithDefaultBound(
                 function, Annotations.Companion.getEMPTY(), false, Variance.INVARIANT,
-                construct.getSpecialTypeParameterName(), 0);
+                construct.getSpecialTypeParameterName(), 0, storageManager);
 
         KotlinType type = typeParameter.getDefaultType();
         KotlinType nullableType = TypeUtils.makeNullable(type);
@@ -220,7 +222,7 @@ public class ControlStructureTypingUtils {
             );
             valueParameters.add(valueParameter);
         }
-        KotlinType returnType = construct != ResolveConstruct.ELVIS ? type : TypeUtilsKt.replaceAnnotations(type, AnnotationsForResolveKt.getExactInAnnotations());
+        KotlinType returnType = construct != ResolveConstruct.ELVIS ? type : TypeUtilsKt.replaceAnnotations(type, AnnotationsForResolveUtilsKt.getExactInAnnotations());
         function.initialize(
                 null,
                 null,
@@ -228,7 +230,7 @@ public class ControlStructureTypingUtils {
                 valueParameters,
                 returnType,
                 Modality.FINAL,
-                Visibilities.PUBLIC
+                DescriptorVisibilities.PUBLIC
         );
         return function;
     }

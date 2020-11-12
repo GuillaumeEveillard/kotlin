@@ -6,12 +6,14 @@
 package org.jetbrains.kotlin.search
 
 import com.intellij.psi.search.PsiTodoSearchHelper
-import com.intellij.psi.search.TodoItem
 import org.jetbrains.kotlin.idea.test.KotlinLightCodeInsightFixtureTestCase
 import org.jetbrains.kotlin.idea.test.KotlinLightProjectDescriptor
 import org.jetbrains.kotlin.idea.test.PluginTestCaseBase
+import org.jetbrains.kotlin.test.JUnit3WithIdeaConfigurationRunner
+import org.junit.runner.RunWith
 import java.io.File
 
+@RunWith(JUnit3WithIdeaConfigurationRunner::class)
 class TodoSearchTest : KotlinLightCodeInsightFixtureTestCase() {
     override fun getProjectDescriptor(): KotlinLightProjectDescriptor = KotlinLightProjectDescriptor.INSTANCE
 
@@ -22,14 +24,16 @@ class TodoSearchTest : KotlinLightCodeInsightFixtureTestCase() {
     fun testTodoCall() {
         val file = myFixture.configureByFile("todoCall.kt")
         val todoItems = PsiTodoSearchHelper.SERVICE.getInstance(myFixture.project).findTodoItems(file)
-        assertEquals(3, todoItems.size)
-        verifyTodoItemText(todoItems[0], "TODO(\"Fix me\")")
-        verifyTodoItemText(todoItems[1], "TODO()")
-        verifyTodoItemText(todoItems[2], "TODO(\"Fix me in lambda\")")
-    }
 
-    private fun verifyTodoItemText(todoItem: TodoItem, s: String) {
-        assertEquals(s, todoItem.textRange.substring(todoItem.file.text))
+        val actualItems = todoItems.map { it.textRange.substring(it.file.text) }
+        assertOrderedEquals(
+            listOf(
+                "TODO(\"Fix me\")",
+                "TODO()",
+                "TODO(\"Fix me in lambda\")"
+            ).sorted(),
+            actualItems.sorted()
+        )
     }
 
     fun testTodoDef() {

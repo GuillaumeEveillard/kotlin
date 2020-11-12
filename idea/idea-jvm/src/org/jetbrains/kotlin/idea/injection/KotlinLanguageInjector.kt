@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
@@ -39,6 +39,7 @@ import org.jetbrains.kotlin.idea.core.util.runInReadActionWithWriteActionPriorit
 import org.jetbrains.kotlin.idea.patterns.KotlinFunctionPattern
 import org.jetbrains.kotlin.idea.references.KtReference
 import org.jetbrains.kotlin.idea.references.mainReference
+import org.jetbrains.kotlin.idea.references.resolveToDescriptors
 import org.jetbrains.kotlin.idea.search.usagesSearch.descriptor
 import org.jetbrains.kotlin.idea.util.ProjectRootsUtil
 import org.jetbrains.kotlin.lexer.KtTokens
@@ -55,11 +56,11 @@ import org.jetbrains.kotlin.utils.addToStdlib.safeAs
 class KotlinLanguageInjector(
     private val project: Project
 ) : MultiHostInjector {
+    private val absentKotlinInjection = BaseInjection("ABSENT_KOTLIN_BASE_INJECTION")
     private val configuration get() = Configuration.getProjectInstance(project)
 
     companion object {
         private val STRING_LITERALS_REGEXP = "\"([^\"]*)\"".toRegex()
-        private val ABSENT_KOTLIN_INJECTION = BaseInjection("ABSENT_KOTLIN_BASE_INJECTION")
     }
 
     private val kotlinSupport: KotlinLanguageInjectionSupport? by lazy {
@@ -87,14 +88,14 @@ class KotlinLanguageInjector(
         val baseInjection = when {
             needImmediateAnswer -> {
                 // Can't afford long counting or typing will be laggy. Force cache reuse even if it's outdated.
-                kotlinCachedInjection?.baseInjection ?: ABSENT_KOTLIN_INJECTION
+                kotlinCachedInjection?.baseInjection ?: absentKotlinInjection
             }
             kotlinCachedInjection != null && (modificationCount == kotlinCachedInjection.modificationCount) ->
                 // Cache is up-to-date
                 kotlinCachedInjection.baseInjection
             else -> {
                 fun computeAndCache(): BaseInjection {
-                    val computedInjection = computeBaseInjection(ktHost, support) ?: ABSENT_KOTLIN_INJECTION
+                    val computedInjection = computeBaseInjection(ktHost, support) ?: absentKotlinInjection
                     ktHost.cachedInjectionWithModification = KotlinCachedInjection(modificationCount, computedInjection)
                     return computedInjection
                 }
@@ -103,14 +104,14 @@ class KotlinLanguageInjector(
                     // The action cannot be canceled by caller and by internal checkCanceled() calls.
                     // Force creating new indicator that is canceled on write action start, otherwise there might be lags in typing.
                     runInReadActionWithWriteActionPriority(::computeAndCache) ?: kotlinCachedInjection?.baseInjection
-                    ?: ABSENT_KOTLIN_INJECTION
+                    ?: absentKotlinInjection
                 } else {
                     computeAndCache()
                 }
             }
         }
 
-        if (baseInjection == ABSENT_KOTLIN_INJECTION) {
+        if (baseInjection == absentKotlinInjection) {
             return
         }
 
@@ -257,11 +258,11 @@ class KotlinLanguageInjector(
         }.firstOrNull()
     }
 
-    private fun injectWithCall(host: KtElement): InjectionInfo? {
-        val ktHost: KtElement = host
-        val argument = ktHost.parent as? KtValueArgument ?: return null
+    private tailrec fun injectWithCall(host: KtElement): InjectionInfo? {
+        val argument = getArgument(host) ?: return null
+        val callExpression = PsiTreeUtil.getParentOfType(argument, KtCallElement::class.java) ?: return null
 
-        val callExpression = PsiTreeUtil.getParentOfType(ktHost, KtCallElement::class.java) ?: return null
+        if (getCallableShortName(callExpression) == "arrayOf") return injectWithCall(callExpression)
         val callee = getNameReference(callExpression.calleeExpression) ?: return null
 
         if (isAnalyzeOff()) return null
@@ -292,10 +293,21 @@ class KotlinLanguageInjector(
         return callee as? KtNameReferenceExpression
     }
 
-    private fun injectInAnnotationCall(host: KtElement): InjectionInfo? {
-        val argument = host.parent as? KtValueArgument ?: return null
+    private fun getArgument(host: KtElement): KtValueArgument? = when (val parent = host.parent) {
+        is KtValueArgument -> parent
+        is KtCollectionLiteralExpression, is KtCallElement -> parent.parent as? KtValueArgument
+        else -> null
+    }
+
+    private tailrec fun injectInAnnotationCall(host: KtElement): InjectionInfo? {
+        val argument = getArgument(host) ?: return null
         val annotationEntry = argument.parent.parent as? KtCallElement ?: return null
-        if (!fastCheckInjectionsExists(annotationEntry)) return null
+
+        val callableShortName = getCallableShortName(annotationEntry) ?: return null
+        if (callableShortName == "arrayOf") return injectInAnnotationCall(annotationEntry)
+
+        if (!fastCheckInjectionsExists(callableShortName)) return null
+
         val calleeExpression = annotationEntry.calleeExpression ?: return null
         val callee = getNameReference(calleeExpression)?.mainReference?.let { reference ->
             allowResolveInDispatchThread { reference.resolve() }
@@ -335,9 +347,14 @@ class KotlinLanguageInjector(
     }
 
     private fun injectionForKotlinCall(argument: KtValueArgument, ktFunction: KtFunction, reference: PsiReference): InjectionInfo? {
+        val argumentName = argument.getArgumentName()?.asName
         val argumentIndex = (argument.parent as KtValueArgumentList).arguments.indexOf(argument)
-        val ktParameter = ktFunction.valueParameters.getOrNull(argumentIndex) ?: return null
-
+        // Prefer using argument name if present
+        val ktParameter = if (argumentName != null) {
+            ktFunction.valueParameters.firstOrNull { it.nameAsName == argumentName }
+        } else {
+            ktFunction.valueParameters.getOrNull(argumentIndex)
+        } ?: return null
         val patternInjection = findInjection(ktParameter, configuration.getInjections(KOTLIN_SUPPORT_ID))
         if (patternInjection != null) {
             return patternInjection
@@ -351,7 +368,11 @@ class KotlinLanguageInjector(
             ktReference.resolveToDescriptors(bindingContext).singleOrNull() as? FunctionDescriptor
         } ?: return null
 
-        val parameterDescriptor = functionDescriptor.valueParameters.getOrNull(argumentIndex) ?: return null
+        val parameterDescriptor = if (argumentName != null) {
+            functionDescriptor.valueParameters.firstOrNull { it.name == argumentName }
+        } else {
+            functionDescriptor.valueParameters.getOrNull(argumentIndex)
+        } ?: return null
         return injectionInfoByAnnotation(parameterDescriptor)
     }
 
@@ -400,10 +421,11 @@ class KotlinLanguageInjector(
 
     private val injectableTargetClassShortNames = CachedValuesManager.getManager(project).createCachedValue(::createCachedValue, false)
 
-    private fun fastCheckInjectionsExists(annotationEntry: KtCallElement): Boolean {
-        val referencedName = getNameReference(annotationEntry.calleeExpression)?.getReferencedName() ?: return false
-        val annotationShortName = annotationEntry.containingKtFile.aliasImportMap()[referencedName].singleOrNull() ?: referencedName
-        return annotationShortName in injectableTargetClassShortNames.value
+    private fun fastCheckInjectionsExists(annotationShortName: String) = annotationShortName in injectableTargetClassShortNames.value
+
+    private fun getCallableShortName(annotationEntry: KtCallElement): String? {
+        val referencedName = getNameReference(annotationEntry.calleeExpression)?.getReferencedName() ?: return null
+        return annotationEntry.containingKtFile.aliasImportMap()[referencedName].singleOrNull() ?: referencedName
     }
 
     private fun retrieveJavaPlaceTargetClassesFQNs(place: InjectionPlace): Collection<String> {

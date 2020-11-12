@@ -7,19 +7,30 @@ package org.jetbrains.kotlin.resolve.calls.inference.components
 
 import org.jetbrains.kotlin.descriptors.TypeParameterDescriptor
 import org.jetbrains.kotlin.descriptors.annotations.CompositeAnnotations
-import org.jetbrains.kotlin.resolve.calls.inference.model.NewTypeVariable
 import org.jetbrains.kotlin.resolve.calls.inference.model.TypeVariableFromCallableDescriptor
+import org.jetbrains.kotlin.resolve.calls.inference.substitute
 import org.jetbrains.kotlin.types.*
 import org.jetbrains.kotlin.types.checker.NewCapturedType
 import org.jetbrains.kotlin.types.checker.NewCapturedTypeConstructor
 import org.jetbrains.kotlin.types.checker.intersectTypes
 import org.jetbrains.kotlin.types.model.TypeSubstitutorMarker
 
-interface NewTypeSubstitutor: TypeSubstitutorMarker {
+interface NewTypeSubstitutor : TypeSubstitutorMarker {
     fun substituteNotNullTypeWithConstructor(constructor: TypeConstructor): UnwrappedType?
 
     fun safeSubstitute(type: UnwrappedType): UnwrappedType =
         substitute(type, runCapturedChecks = true, keepAnnotation = true) ?: type
+
+    val isEmpty: Boolean
+
+    /**
+     * Returns not null when substitutor manages specific type projection substitution by itself.
+     * Intended for corner cases involving interactions with legacy type substitutor,
+     * please consider using substituteNotNullTypeWithConstructor instead of making manual projection substitutions.
+     */
+    fun substituteArgumentProjection(argument: TypeProjection): TypeProjection? {
+        return null
+    }
 
     private fun substitute(type: UnwrappedType, keepAnnotation: Boolean, runCapturedChecks: Boolean): UnwrappedType? =
         when (type) {
@@ -73,29 +84,29 @@ interface NewTypeSubstitutor: TypeSubstitutorMarker {
                         "and class: ${type::class.java.canonicalName}. type.toString() = $type"
             }
             val capturedType = if (type is DefinitelyNotNullType) type.original as NewCapturedType else type as NewCapturedType
-            val lower = capturedType.lowerType?.let { substitute(it, keepAnnotation, runCapturedChecks = false) }
-            if (lower != null && capturedType.lowerType is StubType) {
-                return NewCapturedType(
-                    capturedType.captureStatus,
-                    NewCapturedTypeConstructor(TypeProjectionImpl(typeConstructor.projection.projectionKind, lower)),
-                    lower
-                )
-            }
 
-            if (lower != null) throw IllegalStateException(
-                "Illegal type substitutor: $this, " +
-                        "because for captured type '$type' lower type approximation should be null, but it is: '$lower'," +
-                        "original lower type: '${capturedType.lowerType}"
-            )
+            val innerType = capturedType.lowerType ?: capturedType.constructor.projection.type.unwrap()
+            val substitutedInnerType = substitute(innerType, keepAnnotation, runCapturedChecks = false)
+
+            if (substitutedInnerType != null) {
+                if (innerType is StubType || substitutedInnerType is StubType) {
+                    return NewCapturedType(
+                        capturedType.captureStatus,
+                        NewCapturedTypeConstructor(
+                            TypeProjectionImpl(typeConstructor.projection.projectionKind, substitutedInnerType),
+                            typeParameter = typeConstructor.typeParameter
+                        ),
+                        lowerType = if (capturedType.lowerType != null) substitutedInnerType else null
+                    )
+                } else {
+                    throwExceptionAboutInvalidCapturedSubstitution(capturedType, innerType, substitutedInnerType)
+                }
+            }
 
             if (AbstractTypeChecker.RUN_SLOW_ASSERTIONS) {
                 typeConstructor.supertypes.forEach { supertype ->
                     substitute(supertype, keepAnnotation, runCapturedChecks = false)?.let {
-                        throw IllegalStateException(
-                            "Illegal type substitutor: $this, " +
-                                    "because for captured type '$type' supertype approximation should be null, but it is: '$supertype'," +
-                                    "original supertype: '$supertype'"
-                        )
+                        throwExceptionAboutInvalidCapturedSubstitution(capturedType, supertype, it)
                     }
                 }
             }
@@ -104,12 +115,16 @@ interface NewTypeSubstitutor: TypeSubstitutorMarker {
         }
 
         if (typeConstructor is IntersectionTypeConstructor) {
-            var thereIsChanges = false
+            fun updateNullability(substituted: UnwrappedType) =
+                if (type.isMarkedNullable) substituted.makeNullableAsSpecified(true) else substituted
+
+            substituteNotNullTypeWithConstructor(typeConstructor)?.let { return updateNullability(it) }
+            var thereAreChanges = false
             val newTypes = typeConstructor.supertypes.map {
-                substitute(it.unwrap(), keepAnnotation, runCapturedChecks)?.apply { thereIsChanges = true } ?: it.unwrap()
+                substitute(it.unwrap(), keepAnnotation, runCapturedChecks)?.apply { thereAreChanges = true } ?: it.unwrap()
             }
-            if (!thereIsChanges) return null
-            return intersectTypes(newTypes).let { if (type.isMarkedNullable) it.makeNullableAsSpecified(true) else it }
+            if (!thereAreChanges) return null
+            return updateNullability(intersectTypes(newTypes))
         }
 
         // simple classifier type
@@ -130,6 +145,18 @@ interface NewTypeSubstitutor: TypeSubstitutorMarker {
         return replacement
     }
 
+    private fun throwExceptionAboutInvalidCapturedSubstitution(
+        capturedType: SimpleType,
+        innerType: UnwrappedType,
+        substitutedInnerType: UnwrappedType
+    ): Nothing =
+        throw IllegalStateException(
+            "Illegal type substitutor: $this, " +
+                    "because for captured type '$capturedType' supertype approximation should be null, but it is: '$innerType'," +
+                    "original supertype: '$substitutedInnerType'"
+        )
+
+
     private fun substituteParametrizedType(
         type: SimpleType,
         keepAnnotation: Boolean,
@@ -147,6 +174,13 @@ interface NewTypeSubstitutor: TypeSubstitutorMarker {
             val argument = arguments[index]
 
             if (argument.isStarProjection) continue
+
+            val specialProjectionSubstitution = substituteArgumentProjection(argument)
+            if (specialProjectionSubstitution != null) {
+                newArguments[index] = specialProjectionSubstitution
+                continue
+            }
+
             val substitutedArgumentType = substitute(argument.type.unwrap(), keepAnnotation, runCapturedChecks) ?: continue
 
             newArguments[index] = TypeProjectionImpl(argument.projectionKind, substitutedArgumentType)
@@ -161,10 +195,14 @@ interface NewTypeSubstitutor: TypeSubstitutorMarker {
 
 object EmptySubstitutor : NewTypeSubstitutor {
     override fun substituteNotNullTypeWithConstructor(constructor: TypeConstructor): UnwrappedType? = null
+
+    override val isEmpty: Boolean get() = true
 }
 
 class NewTypeSubstitutorByConstructorMap(val map: Map<TypeConstructor, UnwrappedType>) : NewTypeSubstitutor {
     override fun substituteNotNullTypeWithConstructor(constructor: TypeConstructor): UnwrappedType? = map[constructor]
+
+    override val isEmpty: Boolean get() = map.isEmpty()
 }
 
 class FreshVariableNewTypeSubstitutor(val freshVariables: List<TypeVariableFromCallableDescriptor>) : NewTypeSubstitutor {
@@ -176,12 +214,46 @@ class FreshVariableNewTypeSubstitutor(val freshVariables: List<TypeVariableFromC
         return typeVariable.defaultType
     }
 
+    override val isEmpty: Boolean get() = freshVariables.isEmpty()
+
     companion object {
         val Empty = FreshVariableNewTypeSubstitutor(emptyList())
     }
 }
 
-fun UnwrappedType.substituteTypeVariable(typeVariable: NewTypeVariable, value: UnwrappedType): UnwrappedType {
-    val substitutor = NewTypeSubstitutorByConstructorMap(mapOf(typeVariable.freshTypeConstructor to value))
-    return substitutor.safeSubstitute(this)
+fun createCompositeSubstitutor(appliedFirst: TypeSubstitutor, appliedLast: NewTypeSubstitutor): NewTypeSubstitutor {
+    if (appliedFirst.isEmpty) return appliedLast
+
+    return object : NewTypeSubstitutor {
+        override fun substituteArgumentProjection(argument: TypeProjection): TypeProjection? {
+            val substitutedProjection = appliedFirst.substitute(argument)
+
+            if (substitutedProjection == null || substitutedProjection === argument) {
+                return null
+            }
+
+            if (substitutedProjection.isStarProjection)
+                return substitutedProjection
+
+            val resultingType = appliedLast.safeSubstitute(substitutedProjection.type.unwrap())
+            return TypeProjectionImpl(substitutedProjection.projectionKind, resultingType)
+        }
+
+        override fun substituteNotNullTypeWithConstructor(constructor: TypeConstructor): UnwrappedType? {
+            val substitutedOnce = constructor.declarationDescriptor?.defaultType?.let {
+                appliedFirst.substitute(it)
+            }
+
+            return if (substitutedOnce == null) {
+                appliedLast.substituteNotNullTypeWithConstructor(constructor)
+            } else {
+                appliedLast.safeSubstitute(substitutedOnce)
+            }
+        }
+
+        override val isEmpty: Boolean
+            get() = appliedFirst.isEmpty && appliedLast.isEmpty
+    }
 }
+
+fun TypeSubstitutor.composeWith(appliedAfter: NewTypeSubstitutor) = createCompositeSubstitutor(this, appliedAfter)

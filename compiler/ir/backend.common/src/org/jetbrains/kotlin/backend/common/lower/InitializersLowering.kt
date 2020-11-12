@@ -5,164 +5,112 @@
 
 package org.jetbrains.kotlin.backend.common.lower
 
-import org.jetbrains.kotlin.backend.common.ClassLoweringPass
+import org.jetbrains.kotlin.backend.common.BodyLoweringPass
 import org.jetbrains.kotlin.backend.common.CommonBackendContext
-import org.jetbrains.kotlin.backend.common.deepCopyWithWrappedDescriptors
-import org.jetbrains.kotlin.backend.common.descriptors.WrappedSimpleFunctionDescriptor
-import org.jetbrains.kotlin.backend.common.ir.SetDeclarationsParentVisitor
-import org.jetbrains.kotlin.backend.common.phaser.makeIrFilePhase
-import org.jetbrains.kotlin.descriptors.Modality
-import org.jetbrains.kotlin.descriptors.Visibilities
+import org.jetbrains.kotlin.backend.common.DeclarationTransformer
+import org.jetbrains.kotlin.backend.common.runOnFilePostfix
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.IrStatement
-import org.jetbrains.kotlin.ir.UNDEFINED_OFFSET
 import org.jetbrains.kotlin.ir.declarations.*
-import org.jetbrains.kotlin.ir.declarations.impl.IrFunctionImpl
 import org.jetbrains.kotlin.ir.expressions.*
-import org.jetbrains.kotlin.ir.expressions.impl.IrBlockBodyImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrBlockImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrGetValueImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrSetFieldImpl
-import org.jetbrains.kotlin.ir.util.patchDeclarationParents
-import org.jetbrains.kotlin.ir.visitors.IrElementTransformerVoid
-import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
-import org.jetbrains.kotlin.ir.symbols.impl.IrSimpleFunctionSymbolImpl
+import org.jetbrains.kotlin.ir.util.constructedClass
 import org.jetbrains.kotlin.ir.util.deepCopyWithSymbols
-import org.jetbrains.kotlin.ir.visitors.*
-import org.jetbrains.kotlin.name.Name
+import org.jetbrains.kotlin.ir.util.render
+import org.jetbrains.kotlin.ir.visitors.IrElementTransformerVoid
+import org.jetbrains.kotlin.ir.visitors.IrElementVisitorVoid
+import org.jetbrains.kotlin.ir.visitors.transformChildrenVoid
 
-object SYNTHESIZED_INIT_BLOCK: IrStatementOriginImpl("SYNTHESIZED_INIT_BLOCK")
+object SYNTHESIZED_INIT_BLOCK : IrStatementOriginImpl("SYNTHESIZED_INIT_BLOCK")
 
-fun makeInitializersPhase(origin: IrDeclarationOrigin, clinitNeeded: Boolean)= makeIrFilePhase<CommonBackendContext>(
-    { context -> InitializersLowering(context, origin, clinitNeeded) },
-    name = "Initializers",
-    description = "Handle initializer statements",
-    stickyPostconditions = setOf(::checkNonAnonymousInitializers)
-)
-
-fun checkNonAnonymousInitializers(irFile: IrFile) {
-    irFile.acceptVoid(object : IrElementVisitorVoid {
-        override fun visitElement(element: IrElement) {
-            element.acceptChildrenVoid(this)
-        }
-
-        override fun visitAnonymousInitializer(declaration: IrAnonymousInitializer) {
-            error("No anonymous initializers should remain at this stage")
-        }
-    })
-}
-
-class InitializersLowering(
-    val context: CommonBackendContext,
-    val declarationOrigin: IrDeclarationOrigin,
-    private val clinitNeeded: Boolean
-) : ClassLoweringPass {
-    override fun lower(irClass: IrClass) {
-        val instanceInitializerStatements = handleNonStatics(irClass)
-        transformInstanceInitializerCallsInConstructors(irClass, instanceInitializerStatements)
-
-        val staticInitializerStatements = handleStatics(irClass)
-        if (clinitNeeded && staticInitializerStatements.isNotEmpty())
-            createStaticInitializationMethod(irClass, staticInitializerStatements)
-        irClass.declarations.removeAll { it is IrAnonymousInitializer }
-        irClass.patchDeclarationParents(irClass.parent)
+class InitializersLowering(context: CommonBackendContext) : InitializersLoweringBase(context), BodyLoweringPass {
+    override fun lower(irFile: IrFile) {
+        runOnFilePostfix(irFile, true)
     }
 
-    fun handleNonStatics(irClass: IrClass) =
-        irClass.declarations.filter {
+    override fun lower(irBody: IrBody, container: IrDeclaration) {
+        if (container !is IrConstructor) return
+
+        val irClass = container.constructedClass
+        val instanceInitializerStatements = extractInitializers(irClass) {
             (it is IrField && !it.isStatic) || (it is IrAnonymousInitializer && !it.isStatic)
-        }.mapNotNull { handleDeclaration(irClass, it) }
+        }
+        val block = IrBlockImpl(irClass.startOffset, irClass.endOffset, context.irBuiltIns.unitType, null, instanceInitializerStatements)
+        // Check that the initializers contain no local classes. Deep-copying them is a disaster for code size, and liable to break randomly.
+        block.accept(object : IrElementVisitorVoid {
+            override fun visitElement(element: IrElement) =
+                element.acceptChildren(this, null)
 
-    fun handleStatics(irClass: IrClass) =
-    // Hardcoded order of initializers
-        (irClass.declarations.filter { it is IrField && it.origin == IrDeclarationOrigin.FIELD_FOR_ENUM_ENTRY } +
-                irClass.declarations.filter { it is IrField && it.origin == IrDeclarationOrigin.FIELD_FOR_ENUM_VALUES } +
-                irClass.declarations.filter { it is IrField && it.origin == IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE } +
-                irClass.declarations.filter {
-                    (it is IrField && it.isStatic && it.origin !in listOf(
-                        IrDeclarationOrigin.FIELD_FOR_ENUM_ENTRY,
-                        IrDeclarationOrigin.FIELD_FOR_ENUM_VALUES,
-                        IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE
-                    )) || (it is IrAnonymousInitializer && it.isStatic)
-                })
-            .mapNotNull { handleDeclaration(irClass, it) }
+            override fun visitClass(declaration: IrClass) =
+                throw AssertionError("class in initializer should have been moved out by LocalClassPopupLowering: ${declaration.render()}")
+        }, null)
 
-    fun handleDeclaration(irClass: IrClass, declaration: IrDeclaration): IrStatement? = when(declaration) {
-        is IrField -> handleField(irClass, declaration)
-        is IrAnonymousInitializer -> handleAnonymousInitializer(declaration)
-        else -> null
-    }
-
-    fun handleField(irClass: IrClass, declaration: IrField): IrStatement? {
-        val irFieldInitializer = declaration.initializer?.expression ?: return null
-
-        val receiver =
-            if (!declaration.isStatic) // TODO isStaticField
-                IrGetValueImpl(
-                    irFieldInitializer.startOffset, irFieldInitializer.endOffset,
-                    irClass.thisReceiver!!.type, irClass.thisReceiver!!.symbol
-                )
-            else null
-        return IrSetFieldImpl(
-            irFieldInitializer.startOffset, irFieldInitializer.endOffset,
-            declaration.symbol,
-            receiver,
-            irFieldInitializer,
-            context.irBuiltIns.unitType,
-            null, null
-        )
-    }
-
-
-    fun handleAnonymousInitializer(declaration: IrAnonymousInitializer): IrStatement = IrBlockImpl(
-        declaration.startOffset, declaration.endOffset,
-        context.irBuiltIns.unitType,
-        SYNTHESIZED_INIT_BLOCK,
-        declaration.body.statements
-    )
-
-    fun transformInstanceInitializerCallsInConstructors(irClass: IrClass, instanceInitializerStatements: List<IrStatement>) {
-        irClass.transformChildrenVoid(object : IrElementTransformerVoid() {
-            override fun visitInstanceInitializerCall(expression: IrInstanceInitializerCall): IrExpression {
-                val copiedBlock =
-                    IrBlockImpl(UNDEFINED_OFFSET, UNDEFINED_OFFSET, context.irBuiltIns.unitType, null, instanceInitializerStatements).copy(
-                        irClass
-                    ) as IrBlock
-                return IrBlockImpl(irClass.startOffset, irClass.endOffset, context.irBuiltIns.unitType, null, copiedBlock.statements)
-            }
+        container.body?.transformChildrenVoid(object : IrElementTransformerVoid() {
+            override fun visitInstanceInitializerCall(expression: IrInstanceInitializerCall): IrExpression =
+                block.deepCopyWithSymbols(container)
         })
     }
+}
 
-    fun createStaticInitializationMethod(irClass: IrClass, staticInitializerStatements: List<IrStatement>) {
-        // TODO: mark as synthesized
-        val staticInitializerDescriptor = WrappedSimpleFunctionDescriptor()
-        val staticInitializer = IrFunctionImpl(
-            irClass.startOffset, irClass.endOffset,
-            declarationOrigin,
-            IrSimpleFunctionSymbolImpl(staticInitializerDescriptor),
-            clinitName,
-            Visibilities.PUBLIC,
-            Modality.FINAL,
-            returnType = context.irBuiltIns.unitType,
-            isInline = false,
-            isExternal = false,
-            isTailrec = false,
-            isSuspend = false
-        ).apply {
-            staticInitializerDescriptor.bind(this)
-            body = IrBlockBodyImpl(irClass.startOffset, irClass.endOffset,
-                                   staticInitializerStatements.map { it.copy(irClass) })
-            accept(SetDeclarationsParentVisitor, this)
-            // Should come after SetDeclarationParentVisitor, because it sets staticInitializer's own parent to itself.
-            parent = irClass
+abstract class InitializersLoweringBase(open val context: CommonBackendContext) {
+    protected fun extractInitializers(irClass: IrClass, filter: (IrDeclaration) -> Boolean) =
+        // TODO What about fields that were added by lowerings? e.g. captured outer class or locals?
+        irClass.declarations.mapNotNull { if (it is IrProperty) it.backingField else it }.filter(filter).mapNotNull {
+            when (it) {
+                is IrField -> handleField(irClass, it)
+                is IrAnonymousInitializer -> handleAnonymousInitializer(it)
+                else -> null
+            }
         }
-        irClass.declarations.add(staticInitializer)
-    }
 
-    companion object {
-        val clinitName = Name.special("<clinit>")
+    private fun handleField(irClass: IrClass, declaration: IrField): IrStatement? =
+        declaration.initializer?.run {
+            val receiver = if (!declaration.isStatic) // TODO isStaticField
+                IrGetValueImpl(startOffset, endOffset, irClass.thisReceiver!!.type, irClass.thisReceiver!!.symbol)
+            else
+                null
+            IrSetFieldImpl(
+                startOffset,
+                endOffset,
+                declaration.symbol,
+                receiver,
+                expression,
+                context.irBuiltIns.unitType,
+                IrStatementOrigin.INITIALIZE_FIELD
+            )
+        }
 
-        fun IrStatement.copy(containingDeclaration: IrDeclarationParent) = deepCopyWithSymbols(containingDeclaration)
-        fun IrExpression.copy(containingDeclaration: IrDeclarationParent) = deepCopyWithSymbols(containingDeclaration)
+    private fun handleAnonymousInitializer(declaration: IrAnonymousInitializer): IrStatement =
+        with(declaration) {
+            IrBlockImpl(startOffset, endOffset, context.irBuiltIns.unitType, SYNTHESIZED_INIT_BLOCK, body.statements)
+        }
+}
+
+// Remove anonymous initializers and set field initializers to `null`
+class InitializersCleanupLowering(
+    val context: CommonBackendContext,
+    private val shouldEraseFieldInitializer: (IrField) -> Boolean = { it.correspondingPropertySymbol?.owner?.isConst != true }
+) : DeclarationTransformer {
+    override val withLocalDeclarations: Boolean get() = true
+
+    override fun transformFlat(declaration: IrDeclaration): List<IrDeclaration>? {
+        if (declaration is IrAnonymousInitializer) return emptyList()
+
+        if (declaration is IrField && declaration.parent is IrClass) {
+            if (shouldEraseFieldInitializer(declaration)) {
+                declaration.initializer = null
+            } else {
+                declaration.initializer?.let {
+                    declaration.initializer =
+                        context.irFactory.createExpressionBody(it.startOffset, it.endOffset) {
+                            expression = it.expression.deepCopyWithSymbols()
+                        }
+                }
+            }
+        }
+
+        return null
     }
 }

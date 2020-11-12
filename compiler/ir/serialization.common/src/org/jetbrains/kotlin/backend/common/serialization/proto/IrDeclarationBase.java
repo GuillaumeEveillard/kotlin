@@ -37,7 +37,7 @@ public final class IrDeclarationBase extends
         org.jetbrains.kotlin.protobuf.ByteString.newOutput();
     org.jetbrains.kotlin.protobuf.CodedOutputStream unknownFieldsCodedOutput =
         org.jetbrains.kotlin.protobuf.CodedOutputStream.newInstance(
-            unknownFieldsOutput);
+            unknownFieldsOutput, 1);
     try {
       boolean done = false;
       while (!done) {
@@ -53,56 +53,32 @@ public final class IrDeclarationBase extends
             }
             break;
           }
-          case 10: {
-            org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.Builder subBuilder = null;
-            if (((bitField0_ & 0x00000001) == 0x00000001)) {
-              subBuilder = symbol_.toBuilder();
-            }
-            symbol_ = input.readMessage(org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.PARSER, extensionRegistry);
-            if (subBuilder != null) {
-              subBuilder.mergeFrom(symbol_);
-              symbol_ = subBuilder.buildPartial();
-            }
+          case 8: {
             bitField0_ |= 0x00000001;
+            symbol_ = input.readInt64();
             break;
           }
-          case 18: {
-            org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin.Builder subBuilder = null;
-            if (((bitField0_ & 0x00000002) == 0x00000002)) {
-              subBuilder = origin_.toBuilder();
-            }
-            origin_ = input.readMessage(org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin.PARSER, extensionRegistry);
-            if (subBuilder != null) {
-              subBuilder.mergeFrom(origin_);
-              origin_ = subBuilder.buildPartial();
-            }
+          case 16: {
             bitField0_ |= 0x00000002;
+            originName_ = input.readInt32();
             break;
           }
-          case 26: {
-            org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates.Builder subBuilder = null;
-            if (((bitField0_ & 0x00000004) == 0x00000004)) {
-              subBuilder = coordinates_.toBuilder();
-            }
-            coordinates_ = input.readMessage(org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates.PARSER, extensionRegistry);
-            if (subBuilder != null) {
-              subBuilder.mergeFrom(coordinates_);
-              coordinates_ = subBuilder.buildPartial();
-            }
+          case 24: {
             bitField0_ |= 0x00000004;
+            coordinates_ = input.readInt64();
             break;
           }
-          case 34: {
-            org.jetbrains.kotlin.backend.common.serialization.proto.Annotations.Builder subBuilder = null;
-            if (((bitField0_ & 0x00000008) == 0x00000008)) {
-              subBuilder = annotations_.toBuilder();
-            }
-            annotations_ = input.readMessage(org.jetbrains.kotlin.backend.common.serialization.proto.Annotations.PARSER, extensionRegistry);
-            if (subBuilder != null) {
-              subBuilder.mergeFrom(annotations_);
-              annotations_ = subBuilder.buildPartial();
-            }
+          case 32: {
             bitField0_ |= 0x00000008;
+            flags_ = input.readInt64();
+            break;
+          }
+          case 42: {
+            if (!((mutable_bitField0_ & 0x00000010) == 0x00000010)) {
+              annotation_ = new java.util.ArrayList<org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall>();
+              mutable_bitField0_ |= 0x00000010;
+            }
+            annotation_.add(input.readMessage(org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall.PARSER, extensionRegistry));
             break;
           }
         }
@@ -113,6 +89,9 @@ public final class IrDeclarationBase extends
       throw new org.jetbrains.kotlin.protobuf.InvalidProtocolBufferException(
           e.getMessage()).setUnfinishedMessage(this);
     } finally {
+      if (((mutable_bitField0_ & 0x00000010) == 0x00000010)) {
+        annotation_ = java.util.Collections.unmodifiableList(annotation_);
+      }
       try {
         unknownFieldsCodedOutput.flush();
       } catch (java.io.IOException e) {
@@ -140,70 +119,106 @@ public final class IrDeclarationBase extends
 
   private int bitField0_;
   public static final int SYMBOL_FIELD_NUMBER = 1;
-  private org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex symbol_;
+  private long symbol_;
   /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex symbol = 1;</code>
+   * <code>required int64 symbol = 1;</code>
    */
   public boolean hasSymbol() {
     return ((bitField0_ & 0x00000001) == 0x00000001);
   }
   /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex symbol = 1;</code>
+   * <code>required int64 symbol = 1;</code>
    */
-  public org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex getSymbol() {
+  public long getSymbol() {
     return symbol_;
   }
 
-  public static final int ORIGIN_FIELD_NUMBER = 2;
-  private org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin origin_;
+  public static final int ORIGIN_NAME_FIELD_NUMBER = 2;
+  private int originName_;
   /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin origin = 2;</code>
+   * <code>required int32 origin_name = 2;</code>
    */
-  public boolean hasOrigin() {
+  public boolean hasOriginName() {
     return ((bitField0_ & 0x00000002) == 0x00000002);
   }
   /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin origin = 2;</code>
+   * <code>required int32 origin_name = 2;</code>
    */
-  public org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin getOrigin() {
-    return origin_;
+  public int getOriginName() {
+    return originName_;
   }
 
   public static final int COORDINATES_FIELD_NUMBER = 3;
-  private org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates coordinates_;
+  private long coordinates_;
   /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates coordinates = 3;</code>
+   * <code>required int64 coordinates = 3;</code>
    */
   public boolean hasCoordinates() {
     return ((bitField0_ & 0x00000004) == 0x00000004);
   }
   /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates coordinates = 3;</code>
+   * <code>required int64 coordinates = 3;</code>
    */
-  public org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates getCoordinates() {
+  public long getCoordinates() {
     return coordinates_;
   }
 
-  public static final int ANNOTATIONS_FIELD_NUMBER = 4;
-  private org.jetbrains.kotlin.backend.common.serialization.proto.Annotations annotations_;
+  public static final int FLAGS_FIELD_NUMBER = 4;
+  private long flags_;
   /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.Annotations annotations = 4;</code>
+   * <code>optional int64 flags = 4 [default = 0];</code>
    */
-  public boolean hasAnnotations() {
+  public boolean hasFlags() {
     return ((bitField0_ & 0x00000008) == 0x00000008);
   }
   /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.Annotations annotations = 4;</code>
+   * <code>optional int64 flags = 4 [default = 0];</code>
    */
-  public org.jetbrains.kotlin.backend.common.serialization.proto.Annotations getAnnotations() {
-    return annotations_;
+  public long getFlags() {
+    return flags_;
+  }
+
+  public static final int ANNOTATION_FIELD_NUMBER = 5;
+  private java.util.List<org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall> annotation_;
+  /**
+   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall annotation = 5;</code>
+   */
+  public java.util.List<org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall> getAnnotationList() {
+    return annotation_;
+  }
+  /**
+   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall annotation = 5;</code>
+   */
+  public java.util.List<? extends org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCallOrBuilder> 
+      getAnnotationOrBuilderList() {
+    return annotation_;
+  }
+  /**
+   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall annotation = 5;</code>
+   */
+  public int getAnnotationCount() {
+    return annotation_.size();
+  }
+  /**
+   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall annotation = 5;</code>
+   */
+  public org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall getAnnotation(int index) {
+    return annotation_.get(index);
+  }
+  /**
+   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall annotation = 5;</code>
+   */
+  public org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCallOrBuilder getAnnotationOrBuilder(
+      int index) {
+    return annotation_.get(index);
   }
 
   private void initFields() {
-    symbol_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.getDefaultInstance();
-    origin_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin.getDefaultInstance();
-    coordinates_ = org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates.getDefaultInstance();
-    annotations_ = org.jetbrains.kotlin.backend.common.serialization.proto.Annotations.getDefaultInstance();
+    symbol_ = 0L;
+    originName_ = 0;
+    coordinates_ = 0L;
+    flags_ = 0L;
+    annotation_ = java.util.Collections.emptyList();
   }
   private byte memoizedIsInitialized = -1;
   public final boolean isInitialized() {
@@ -215,7 +230,7 @@ public final class IrDeclarationBase extends
       memoizedIsInitialized = 0;
       return false;
     }
-    if (!hasOrigin()) {
+    if (!hasOriginName()) {
       memoizedIsInitialized = 0;
       return false;
     }
@@ -223,25 +238,11 @@ public final class IrDeclarationBase extends
       memoizedIsInitialized = 0;
       return false;
     }
-    if (!hasAnnotations()) {
-      memoizedIsInitialized = 0;
-      return false;
-    }
-    if (!getSymbol().isInitialized()) {
-      memoizedIsInitialized = 0;
-      return false;
-    }
-    if (!getOrigin().isInitialized()) {
-      memoizedIsInitialized = 0;
-      return false;
-    }
-    if (!getCoordinates().isInitialized()) {
-      memoizedIsInitialized = 0;
-      return false;
-    }
-    if (!getAnnotations().isInitialized()) {
-      memoizedIsInitialized = 0;
-      return false;
+    for (int i = 0; i < getAnnotationCount(); i++) {
+      if (!getAnnotation(i).isInitialized()) {
+        memoizedIsInitialized = 0;
+        return false;
+      }
     }
     memoizedIsInitialized = 1;
     return true;
@@ -251,16 +252,19 @@ public final class IrDeclarationBase extends
                       throws java.io.IOException {
     getSerializedSize();
     if (((bitField0_ & 0x00000001) == 0x00000001)) {
-      output.writeMessage(1, symbol_);
+      output.writeInt64(1, symbol_);
     }
     if (((bitField0_ & 0x00000002) == 0x00000002)) {
-      output.writeMessage(2, origin_);
+      output.writeInt32(2, originName_);
     }
     if (((bitField0_ & 0x00000004) == 0x00000004)) {
-      output.writeMessage(3, coordinates_);
+      output.writeInt64(3, coordinates_);
     }
     if (((bitField0_ & 0x00000008) == 0x00000008)) {
-      output.writeMessage(4, annotations_);
+      output.writeInt64(4, flags_);
+    }
+    for (int i = 0; i < annotation_.size(); i++) {
+      output.writeMessage(5, annotation_.get(i));
     }
     output.writeRawBytes(unknownFields);
   }
@@ -273,19 +277,23 @@ public final class IrDeclarationBase extends
     size = 0;
     if (((bitField0_ & 0x00000001) == 0x00000001)) {
       size += org.jetbrains.kotlin.protobuf.CodedOutputStream
-        .computeMessageSize(1, symbol_);
+        .computeInt64Size(1, symbol_);
     }
     if (((bitField0_ & 0x00000002) == 0x00000002)) {
       size += org.jetbrains.kotlin.protobuf.CodedOutputStream
-        .computeMessageSize(2, origin_);
+        .computeInt32Size(2, originName_);
     }
     if (((bitField0_ & 0x00000004) == 0x00000004)) {
       size += org.jetbrains.kotlin.protobuf.CodedOutputStream
-        .computeMessageSize(3, coordinates_);
+        .computeInt64Size(3, coordinates_);
     }
     if (((bitField0_ & 0x00000008) == 0x00000008)) {
       size += org.jetbrains.kotlin.protobuf.CodedOutputStream
-        .computeMessageSize(4, annotations_);
+        .computeInt64Size(4, flags_);
+    }
+    for (int i = 0; i < annotation_.size(); i++) {
+      size += org.jetbrains.kotlin.protobuf.CodedOutputStream
+        .computeMessageSize(5, annotation_.get(i));
     }
     size += unknownFields.size();
     memoizedSerializedSize = size;
@@ -381,14 +389,16 @@ public final class IrDeclarationBase extends
 
     public Builder clear() {
       super.clear();
-      symbol_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.getDefaultInstance();
+      symbol_ = 0L;
       bitField0_ = (bitField0_ & ~0x00000001);
-      origin_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin.getDefaultInstance();
+      originName_ = 0;
       bitField0_ = (bitField0_ & ~0x00000002);
-      coordinates_ = org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates.getDefaultInstance();
+      coordinates_ = 0L;
       bitField0_ = (bitField0_ & ~0x00000004);
-      annotations_ = org.jetbrains.kotlin.backend.common.serialization.proto.Annotations.getDefaultInstance();
+      flags_ = 0L;
       bitField0_ = (bitField0_ & ~0x00000008);
+      annotation_ = java.util.Collections.emptyList();
+      bitField0_ = (bitField0_ & ~0x00000010);
       return this;
     }
 
@@ -419,7 +429,7 @@ public final class IrDeclarationBase extends
       if (((from_bitField0_ & 0x00000002) == 0x00000002)) {
         to_bitField0_ |= 0x00000002;
       }
-      result.origin_ = origin_;
+      result.originName_ = originName_;
       if (((from_bitField0_ & 0x00000004) == 0x00000004)) {
         to_bitField0_ |= 0x00000004;
       }
@@ -427,7 +437,12 @@ public final class IrDeclarationBase extends
       if (((from_bitField0_ & 0x00000008) == 0x00000008)) {
         to_bitField0_ |= 0x00000008;
       }
-      result.annotations_ = annotations_;
+      result.flags_ = flags_;
+      if (((bitField0_ & 0x00000010) == 0x00000010)) {
+        annotation_ = java.util.Collections.unmodifiableList(annotation_);
+        bitField0_ = (bitField0_ & ~0x00000010);
+      }
+      result.annotation_ = annotation_;
       result.bitField0_ = to_bitField0_;
       return result;
     }
@@ -435,16 +450,26 @@ public final class IrDeclarationBase extends
     public Builder mergeFrom(org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationBase other) {
       if (other == org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationBase.getDefaultInstance()) return this;
       if (other.hasSymbol()) {
-        mergeSymbol(other.getSymbol());
+        setSymbol(other.getSymbol());
       }
-      if (other.hasOrigin()) {
-        mergeOrigin(other.getOrigin());
+      if (other.hasOriginName()) {
+        setOriginName(other.getOriginName());
       }
       if (other.hasCoordinates()) {
-        mergeCoordinates(other.getCoordinates());
+        setCoordinates(other.getCoordinates());
       }
-      if (other.hasAnnotations()) {
-        mergeAnnotations(other.getAnnotations());
+      if (other.hasFlags()) {
+        setFlags(other.getFlags());
+      }
+      if (!other.annotation_.isEmpty()) {
+        if (annotation_.isEmpty()) {
+          annotation_ = other.annotation_;
+          bitField0_ = (bitField0_ & ~0x00000010);
+        } else {
+          ensureAnnotationIsMutable();
+          annotation_.addAll(other.annotation_);
+        }
+        
       }
       setUnknownFields(
           getUnknownFields().concat(other.unknownFields));
@@ -456,7 +481,7 @@ public final class IrDeclarationBase extends
         
         return false;
       }
-      if (!hasOrigin()) {
+      if (!hasOriginName()) {
         
         return false;
       }
@@ -464,25 +489,11 @@ public final class IrDeclarationBase extends
         
         return false;
       }
-      if (!hasAnnotations()) {
-        
-        return false;
-      }
-      if (!getSymbol().isInitialized()) {
-        
-        return false;
-      }
-      if (!getOrigin().isInitialized()) {
-        
-        return false;
-      }
-      if (!getCoordinates().isInitialized()) {
-        
-        return false;
-      }
-      if (!getAnnotations().isInitialized()) {
-        
-        return false;
+      for (int i = 0; i < getAnnotationCount(); i++) {
+        if (!getAnnotation(i).isInitialized()) {
+          
+          return false;
+        }
       }
       return true;
     }
@@ -506,243 +517,256 @@ public final class IrDeclarationBase extends
     }
     private int bitField0_;
 
-    private org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex symbol_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.getDefaultInstance();
+    private long symbol_ ;
     /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex symbol = 1;</code>
+     * <code>required int64 symbol = 1;</code>
      */
     public boolean hasSymbol() {
       return ((bitField0_ & 0x00000001) == 0x00000001);
     }
     /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex symbol = 1;</code>
+     * <code>required int64 symbol = 1;</code>
      */
-    public org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex getSymbol() {
+    public long getSymbol() {
       return symbol_;
     }
     /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex symbol = 1;</code>
+     * <code>required int64 symbol = 1;</code>
      */
-    public Builder setSymbol(org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex value) {
-      if (value == null) {
-        throw new NullPointerException();
-      }
+    public Builder setSymbol(long value) {
+      bitField0_ |= 0x00000001;
       symbol_ = value;
-
-      bitField0_ |= 0x00000001;
+      
       return this;
     }
     /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex symbol = 1;</code>
-     */
-    public Builder setSymbol(
-        org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.Builder builderForValue) {
-      symbol_ = builderForValue.build();
-
-      bitField0_ |= 0x00000001;
-      return this;
-    }
-    /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex symbol = 1;</code>
-     */
-    public Builder mergeSymbol(org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex value) {
-      if (((bitField0_ & 0x00000001) == 0x00000001) &&
-          symbol_ != org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.getDefaultInstance()) {
-        symbol_ =
-          org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.newBuilder(symbol_).mergeFrom(value).buildPartial();
-      } else {
-        symbol_ = value;
-      }
-
-      bitField0_ |= 0x00000001;
-      return this;
-    }
-    /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex symbol = 1;</code>
+     * <code>required int64 symbol = 1;</code>
      */
     public Builder clearSymbol() {
-      symbol_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.getDefaultInstance();
-
       bitField0_ = (bitField0_ & ~0x00000001);
+      symbol_ = 0L;
+      
       return this;
     }
 
-    private org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin origin_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin.getDefaultInstance();
+    private int originName_ ;
     /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin origin = 2;</code>
+     * <code>required int32 origin_name = 2;</code>
      */
-    public boolean hasOrigin() {
+    public boolean hasOriginName() {
       return ((bitField0_ & 0x00000002) == 0x00000002);
     }
     /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin origin = 2;</code>
+     * <code>required int32 origin_name = 2;</code>
      */
-    public org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin getOrigin() {
-      return origin_;
+    public int getOriginName() {
+      return originName_;
     }
     /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin origin = 2;</code>
+     * <code>required int32 origin_name = 2;</code>
      */
-    public Builder setOrigin(org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin value) {
-      if (value == null) {
-        throw new NullPointerException();
-      }
-      origin_ = value;
-
+    public Builder setOriginName(int value) {
       bitField0_ |= 0x00000002;
+      originName_ = value;
+      
       return this;
     }
     /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin origin = 2;</code>
+     * <code>required int32 origin_name = 2;</code>
      */
-    public Builder setOrigin(
-        org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin.Builder builderForValue) {
-      origin_ = builderForValue.build();
-
-      bitField0_ |= 0x00000002;
-      return this;
-    }
-    /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin origin = 2;</code>
-     */
-    public Builder mergeOrigin(org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin value) {
-      if (((bitField0_ & 0x00000002) == 0x00000002) &&
-          origin_ != org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin.getDefaultInstance()) {
-        origin_ =
-          org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin.newBuilder(origin_).mergeFrom(value).buildPartial();
-      } else {
-        origin_ = value;
-      }
-
-      bitField0_ |= 0x00000002;
-      return this;
-    }
-    /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin origin = 2;</code>
-     */
-    public Builder clearOrigin() {
-      origin_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationOrigin.getDefaultInstance();
-
+    public Builder clearOriginName() {
       bitField0_ = (bitField0_ & ~0x00000002);
+      originName_ = 0;
+      
       return this;
     }
 
-    private org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates coordinates_ = org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates.getDefaultInstance();
+    private long coordinates_ ;
     /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates coordinates = 3;</code>
+     * <code>required int64 coordinates = 3;</code>
      */
     public boolean hasCoordinates() {
       return ((bitField0_ & 0x00000004) == 0x00000004);
     }
     /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates coordinates = 3;</code>
+     * <code>required int64 coordinates = 3;</code>
      */
-    public org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates getCoordinates() {
+    public long getCoordinates() {
       return coordinates_;
     }
     /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates coordinates = 3;</code>
+     * <code>required int64 coordinates = 3;</code>
      */
-    public Builder setCoordinates(org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates value) {
-      if (value == null) {
-        throw new NullPointerException();
-      }
+    public Builder setCoordinates(long value) {
+      bitField0_ |= 0x00000004;
       coordinates_ = value;
-
-      bitField0_ |= 0x00000004;
+      
       return this;
     }
     /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates coordinates = 3;</code>
-     */
-    public Builder setCoordinates(
-        org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates.Builder builderForValue) {
-      coordinates_ = builderForValue.build();
-
-      bitField0_ |= 0x00000004;
-      return this;
-    }
-    /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates coordinates = 3;</code>
-     */
-    public Builder mergeCoordinates(org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates value) {
-      if (((bitField0_ & 0x00000004) == 0x00000004) &&
-          coordinates_ != org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates.getDefaultInstance()) {
-        coordinates_ =
-          org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates.newBuilder(coordinates_).mergeFrom(value).buildPartial();
-      } else {
-        coordinates_ = value;
-      }
-
-      bitField0_ |= 0x00000004;
-      return this;
-    }
-    /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates coordinates = 3;</code>
+     * <code>required int64 coordinates = 3;</code>
      */
     public Builder clearCoordinates() {
-      coordinates_ = org.jetbrains.kotlin.backend.common.serialization.proto.Coordinates.getDefaultInstance();
-
       bitField0_ = (bitField0_ & ~0x00000004);
+      coordinates_ = 0L;
+      
       return this;
     }
 
-    private org.jetbrains.kotlin.backend.common.serialization.proto.Annotations annotations_ = org.jetbrains.kotlin.backend.common.serialization.proto.Annotations.getDefaultInstance();
+    private long flags_ ;
     /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.Annotations annotations = 4;</code>
+     * <code>optional int64 flags = 4 [default = 0];</code>
      */
-    public boolean hasAnnotations() {
+    public boolean hasFlags() {
       return ((bitField0_ & 0x00000008) == 0x00000008);
     }
     /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.Annotations annotations = 4;</code>
+     * <code>optional int64 flags = 4 [default = 0];</code>
      */
-    public org.jetbrains.kotlin.backend.common.serialization.proto.Annotations getAnnotations() {
-      return annotations_;
+    public long getFlags() {
+      return flags_;
     }
     /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.Annotations annotations = 4;</code>
+     * <code>optional int64 flags = 4 [default = 0];</code>
      */
-    public Builder setAnnotations(org.jetbrains.kotlin.backend.common.serialization.proto.Annotations value) {
+    public Builder setFlags(long value) {
+      bitField0_ |= 0x00000008;
+      flags_ = value;
+      
+      return this;
+    }
+    /**
+     * <code>optional int64 flags = 4 [default = 0];</code>
+     */
+    public Builder clearFlags() {
+      bitField0_ = (bitField0_ & ~0x00000008);
+      flags_ = 0L;
+      
+      return this;
+    }
+
+    private java.util.List<org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall> annotation_ =
+      java.util.Collections.emptyList();
+    private void ensureAnnotationIsMutable() {
+      if (!((bitField0_ & 0x00000010) == 0x00000010)) {
+        annotation_ = new java.util.ArrayList<org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall>(annotation_);
+        bitField0_ |= 0x00000010;
+       }
+    }
+
+    /**
+     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall annotation = 5;</code>
+     */
+    public java.util.List<org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall> getAnnotationList() {
+      return java.util.Collections.unmodifiableList(annotation_);
+    }
+    /**
+     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall annotation = 5;</code>
+     */
+    public int getAnnotationCount() {
+      return annotation_.size();
+    }
+    /**
+     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall annotation = 5;</code>
+     */
+    public org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall getAnnotation(int index) {
+      return annotation_.get(index);
+    }
+    /**
+     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall annotation = 5;</code>
+     */
+    public Builder setAnnotation(
+        int index, org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall value) {
       if (value == null) {
         throw new NullPointerException();
       }
-      annotations_ = value;
+      ensureAnnotationIsMutable();
+      annotation_.set(index, value);
 
-      bitField0_ |= 0x00000008;
       return this;
     }
     /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.Annotations annotations = 4;</code>
+     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall annotation = 5;</code>
      */
-    public Builder setAnnotations(
-        org.jetbrains.kotlin.backend.common.serialization.proto.Annotations.Builder builderForValue) {
-      annotations_ = builderForValue.build();
+    public Builder setAnnotation(
+        int index, org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall.Builder builderForValue) {
+      ensureAnnotationIsMutable();
+      annotation_.set(index, builderForValue.build());
 
-      bitField0_ |= 0x00000008;
       return this;
     }
     /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.Annotations annotations = 4;</code>
+     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall annotation = 5;</code>
      */
-    public Builder mergeAnnotations(org.jetbrains.kotlin.backend.common.serialization.proto.Annotations value) {
-      if (((bitField0_ & 0x00000008) == 0x00000008) &&
-          annotations_ != org.jetbrains.kotlin.backend.common.serialization.proto.Annotations.getDefaultInstance()) {
-        annotations_ =
-          org.jetbrains.kotlin.backend.common.serialization.proto.Annotations.newBuilder(annotations_).mergeFrom(value).buildPartial();
-      } else {
-        annotations_ = value;
+    public Builder addAnnotation(org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall value) {
+      if (value == null) {
+        throw new NullPointerException();
       }
+      ensureAnnotationIsMutable();
+      annotation_.add(value);
 
-      bitField0_ |= 0x00000008;
       return this;
     }
     /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.Annotations annotations = 4;</code>
+     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall annotation = 5;</code>
      */
-    public Builder clearAnnotations() {
-      annotations_ = org.jetbrains.kotlin.backend.common.serialization.proto.Annotations.getDefaultInstance();
+    public Builder addAnnotation(
+        int index, org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall value) {
+      if (value == null) {
+        throw new NullPointerException();
+      }
+      ensureAnnotationIsMutable();
+      annotation_.add(index, value);
 
-      bitField0_ = (bitField0_ & ~0x00000008);
+      return this;
+    }
+    /**
+     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall annotation = 5;</code>
+     */
+    public Builder addAnnotation(
+        org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall.Builder builderForValue) {
+      ensureAnnotationIsMutable();
+      annotation_.add(builderForValue.build());
+
+      return this;
+    }
+    /**
+     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall annotation = 5;</code>
+     */
+    public Builder addAnnotation(
+        int index, org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall.Builder builderForValue) {
+      ensureAnnotationIsMutable();
+      annotation_.add(index, builderForValue.build());
+
+      return this;
+    }
+    /**
+     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall annotation = 5;</code>
+     */
+    public Builder addAllAnnotation(
+        java.lang.Iterable<? extends org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall> values) {
+      ensureAnnotationIsMutable();
+      org.jetbrains.kotlin.protobuf.AbstractMessageLite.Builder.addAll(
+          values, annotation_);
+
+      return this;
+    }
+    /**
+     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall annotation = 5;</code>
+     */
+    public Builder clearAnnotation() {
+      annotation_ = java.util.Collections.emptyList();
+      bitField0_ = (bitField0_ & ~0x00000010);
+
+      return this;
+    }
+    /**
+     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrConstructorCall annotation = 5;</code>
+     */
+    public Builder removeAnnotation(int index) {
+      ensureAnnotationIsMutable();
+      annotation_.remove(index);
+
       return this;
     }
 

@@ -6,28 +6,43 @@
 package org.jetbrains.kotlin.fir
 
 import org.jetbrains.kotlin.fir.expressions.FirQualifiedAccess
+import org.jetbrains.kotlin.fir.expressions.FirResolvedQualifier
 import org.jetbrains.kotlin.fir.expressions.FirStatement
-import org.jetbrains.kotlin.fir.expressions.impl.FirResolvedQualifierImpl
-import org.jetbrains.kotlin.fir.references.FirSimpleNamedReference
+import org.jetbrains.kotlin.fir.expressions.builder.buildResolvedQualifier
+import org.jetbrains.kotlin.fir.references.impl.FirSimpleNamedReference
 import org.jetbrains.kotlin.fir.resolve.BodyResolveComponents
-import org.jetbrains.kotlin.fir.resolve.FirSymbolProvider
+import org.jetbrains.kotlin.fir.resolve.firSymbolProvider
 import org.jetbrains.kotlin.fir.resolve.transformers.PackageOrClass
+import org.jetbrains.kotlin.fir.resolve.transformers.body.resolve.resultType
 import org.jetbrains.kotlin.fir.resolve.transformers.resolveToPackageOrClass
-import org.jetbrains.kotlin.fir.resolve.transformers.resultType
 import org.jetbrains.kotlin.fir.resolve.typeForQualifier
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
 
-class FirQualifiedNameResolver(components: BodyResolveComponents) : BodyResolveComponents by components {
+class FirQualifiedNameResolver(private val components: BodyResolveComponents) {
+    private val session = components.session
     private var qualifierStack = mutableListOf<Name>()
     private var qualifierPartsToDrop = 0
 
     fun reset() {
         qualifierStack.clear()
+        qualifierPartsToDrop = 0
     }
 
-    fun initProcessingQualifiedAccess(qualifiedAccess: FirQualifiedAccess, callee: FirSimpleNamedReference) {
-        if (qualifiedAccess.safe || callee.name.isSpecial) {
+
+    /**
+     * NB: 0 if current 'qualifiedAccess.safe || callee.name.isSpecial', 1 if current is fine, 2 if potential qualifier
+     * a.b.c
+     *   ^ here stack will be ['c', 'b'], so possible
+     * a.b?.c
+     *   ^ here stack will be ['b'], so impossible
+     * a?.b.c
+     *    ^ here stack will be [], so impossible
+     */
+    fun isPotentialQualifierPartPosition() = qualifierStack.size > 1
+
+    fun initProcessingQualifiedAccess(callee: FirSimpleNamedReference) {
+        if (callee.name.isSpecial) {
             qualifierStack.clear()
         } else {
             qualifierStack.add(callee.name)
@@ -42,8 +57,11 @@ class FirQualifiedNameResolver(components: BodyResolveComponents) : BodyResolveC
             null
         }
 
-    fun tryResolveAsQualifier(): FirStatement? {
-        val symbolProvider = session.service<FirSymbolProvider>()
+    fun tryResolveAsQualifier(source: FirSourceElement?): FirResolvedQualifier? {
+        if (qualifierStack.isEmpty()) {
+            return null
+        }
+        val symbolProvider = session.firSymbolProvider
         var qualifierParts = qualifierStack.asReversed().map { it.asString() }
         var resolved: PackageOrClass?
         do {
@@ -57,11 +75,14 @@ class FirQualifiedNameResolver(components: BodyResolveComponents) : BodyResolveC
 
         if (resolved != null) {
             qualifierPartsToDrop = qualifierParts.size - 1
-            return FirResolvedQualifierImpl(
-                null /* TODO */,
-                resolved.packageFqName,
-                resolved.relativeClassFqName
-            ).apply { resultType = typeForQualifier(this) }
+            return buildResolvedQualifier {
+                this.source = source
+                packageFqName = resolved.packageFqName
+                relativeClassFqName = resolved.relativeClassFqName
+                symbol = resolved.classSymbol
+            }.apply {
+                resultType = components.typeForQualifier(this)
+            }
         }
 
         return null

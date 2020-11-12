@@ -7,7 +7,7 @@ package org.jetbrains.kotlin.idea.stubs
 
 import com.intellij.psi.impl.DebugUtil
 import com.intellij.psi.stubs.StubElement
-import com.intellij.testFramework.fixtures.LightCodeInsightFixtureTestCase
+import org.jetbrains.kotlin.idea.test.KotlinLightCodeInsightFixtureTestCase
 import org.jetbrains.kotlin.name.SpecialNames
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.psi.stubs.elements.KtFileStubBuilder
@@ -16,13 +16,13 @@ import org.jetbrains.kotlin.test.KotlinTestUtils
 
 import java.io.File
 
-abstract class AbstractStubBuilderTest : LightCodeInsightFixtureTestCase() {
-    protected fun doTest(sourcePath: String) {
-        val file = myFixture.configureByFile(sourcePath) as KtFile
-        val jetStubBuilder = KtFileStubBuilder()
-        val lighterTree = jetStubBuilder.buildStubTree(file)
+abstract class AbstractStubBuilderTest : KotlinLightCodeInsightFixtureTestCase() {
+    protected fun doTest(unused: String) {
+        val file = myFixture.configureByFile(fileName()) as KtFile
+        val ktStubBuilder = KtFileStubBuilder()
+        val lighterTree = ktStubBuilder.buildStubTree(file)
         val stubTree = serializeStubToString(lighterTree)
-        val expectedFile = sourcePath.replace(".kt", ".expected")
+        val expectedFile = testPath().replace(".kt", ".expected")
         KotlinTestUtils.assertEqualsToFile(File(expectedFile), stubTree)
     }
 
@@ -32,17 +32,15 @@ abstract class AbstractStubBuilderTest : LightCodeInsightFixtureTestCase() {
 
             // Nodes are stored in form "NodeType:Node" and have too many repeating information for Kotlin stubs
             // Remove all repeating information (See KotlinStubBaseImpl.toString())
-            return treeStr
-                    .lines().map {
-                        if (it.contains(STUB_TO_STRING_PREFIX)) {
-                            it.takeWhile { it.isWhitespace() } + it.substringAfter("KotlinStub$")
-                        }
-                        else {
-                            it
-                        }
+            return treeStr.lines().map {
+                    if (it.contains(STUB_TO_STRING_PREFIX)) {
+                        it.takeWhile { it.isWhitespace() } + it.substringAfter("KotlinStub$")
+                    } else {
+                        it
                     }
-                    .joinToString(separator = "\n")
-                    .replace(", [", "[")
+                }
+                .joinToString(separator = "\n")
+                .replace(", [", "[")
         }
     }
 }

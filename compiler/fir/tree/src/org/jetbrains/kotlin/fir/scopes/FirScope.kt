@@ -1,55 +1,63 @@
 /*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
 package org.jetbrains.kotlin.fir.scopes
 
-import org.jetbrains.kotlin.fir.scopes.ProcessorAction.NEXT
-import org.jetbrains.kotlin.fir.scopes.ProcessorAction.STOP
-import org.jetbrains.kotlin.fir.symbols.impl.FirCallableSymbol
+import org.jetbrains.kotlin.fir.resolve.substitution.ConeSubstitutor
 import org.jetbrains.kotlin.fir.symbols.impl.FirClassifierSymbol
+import org.jetbrains.kotlin.fir.symbols.impl.FirConstructorSymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirFunctionSymbol
+import org.jetbrains.kotlin.fir.symbols.impl.FirVariableSymbol
 import org.jetbrains.kotlin.name.Name
 
 abstract class FirScope {
-    @Deprecated(
-        "obsolete",
-        replaceWith = ReplaceWith("processClassifiersByNameWithAction(name, position) { if (processor()) ProcessorAction.NEXT else ProcessorAction.STOP }.next()")
-    )
-    open fun processClassifiersByName(
+    open fun processClassifiersByNameWithSubstitution(
         name: Name,
-        position: FirPosition,
-        processor: (FirClassifierSymbol<*>) -> Boolean
-    ): Boolean = true
+        processor: (FirClassifierSymbol<*>, ConeSubstitutor) -> Unit
+    ) {}
 
     open fun processFunctionsByName(
         name: Name,
-        processor: (FirFunctionSymbol<*>) -> ProcessorAction
-    ): ProcessorAction = NEXT
+        processor: (FirFunctionSymbol<*>) -> Unit
+    ) {}
 
     open fun processPropertiesByName(
         name: Name,
-        // NB: it'd be great to write FirVariableSymbol<*> here, but there is FirAccessorSymbol :(
-        processor: (FirCallableSymbol<*>) -> ProcessorAction
-    ): ProcessorAction = NEXT
+        processor: (FirVariableSymbol<*>) -> Unit
+    ) {}
+
+    open fun processDeclaredConstructors(
+        processor: (FirConstructorSymbol) -> Unit
+    ) {}
+
+    open fun mayContainName(name: Name) = true
 }
 
+fun FirScope.getSingleClassifier(name: Name): FirClassifierSymbol<*>? = mutableListOf<FirClassifierSymbol<*>>().apply {
+    processClassifiersByName(name, this::add)
+}.singleOrNull()
 
-inline fun FirScope.processClassifiersByNameWithAction(
-    name: Name,
-    position: FirPosition,
-    crossinline processor: (FirClassifierSymbol<*>) -> ProcessorAction
+fun FirScope.getFunctions(name: Name): List<FirFunctionSymbol<*>> = mutableListOf<FirFunctionSymbol<*>>().apply {
+    processFunctionsByName(name, this::add)
+}
+
+fun FirScope.getProperties(name: Name): List<FirVariableSymbol<*>> = mutableListOf<FirVariableSymbol<*>>().apply {
+    processPropertiesByName(name, this::add)
+}
+
+fun FirScope.getDeclaredConstructors(): List<FirConstructorSymbol> = mutableListOf<FirConstructorSymbol>().apply {
+    processDeclaredConstructors(this::add)
+}
+
+fun FirTypeScope.processOverriddenFunctionsAndSelf(
+    functionSymbol: FirFunctionSymbol<*>,
+    processor: (FirFunctionSymbol<*>) -> ProcessorAction
 ): ProcessorAction {
-    val result = processClassifiersByName(name, position) {
-        processor(it).next()
-    }
-    return if (result) NEXT else STOP
-}
+    if (!processor(functionSymbol)) return ProcessorAction.STOP
 
-enum class FirPosition(val allowTypeParameters: Boolean = true) {
-    SUPER_TYPE_OR_EXPANSION(allowTypeParameters = false),
-    OTHER
+    return processOverriddenFunctions(functionSymbol, processor)
 }
 
 enum class ProcessorAction {
@@ -67,4 +75,17 @@ enum class ProcessorAction {
 
     fun stop() = this == STOP
     fun next() = this != STOP
+
+    operator fun plus(other: ProcessorAction): ProcessorAction {
+        if (this == NEXT || other == NEXT) return NEXT
+        return this
+    }
+}
+
+@Suppress("NOTHING_TO_INLINE")
+inline fun FirScope.processClassifiersByName(
+    name: Name,
+    noinline processor: (FirClassifierSymbol<*>) -> Unit
+) {
+    processClassifiersByNameWithSubstitution(name) { symbol, _ -> processor(symbol) }
 }

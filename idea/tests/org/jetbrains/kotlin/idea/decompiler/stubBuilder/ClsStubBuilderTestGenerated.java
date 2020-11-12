@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
@@ -8,7 +8,6 @@ package org.jetbrains.kotlin.idea.decompiler.stubBuilder;
 import com.intellij.testFramework.TestDataPath;
 import org.jetbrains.kotlin.test.JUnit3RunnerWithInners;
 import org.jetbrains.kotlin.test.KotlinTestUtils;
-import org.jetbrains.kotlin.test.TargetBackend;
 import org.jetbrains.kotlin.test.TestMetadata;
 import org.junit.runner.RunWith;
 
@@ -22,11 +21,11 @@ import java.util.regex.Pattern;
 @RunWith(JUnit3RunnerWithInners.class)
 public class ClsStubBuilderTestGenerated extends AbstractClsStubBuilderTest {
     private void runTest(String testDataFilePath) throws Exception {
-        KotlinTestUtils.runTest(this::doTest, TargetBackend.ANY, testDataFilePath);
+        KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
     }
 
     public void testAllFilesPresentInStubBuilder() throws Exception {
-        KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("idea/testData/decompiler/stubBuilder"), Pattern.compile("^([^\\.]+)$"), TargetBackend.ANY, false);
+        KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("idea/testData/decompiler/stubBuilder"), Pattern.compile("^([^\\.]+)$"), null, false);
     }
 
     @TestMetadata("AnnotatedFlexibleTypes")
@@ -119,6 +118,11 @@ public class ClsStubBuilderTestGenerated extends AbstractClsStubBuilderTest {
         runTest("idea/testData/decompiler/stubBuilder/FlexibleTypes/");
     }
 
+    @TestMetadata("FunInterfaceDeclaration")
+    public void testFunInterfaceDeclaration() throws Exception {
+        runTest("idea/testData/decompiler/stubBuilder/FunInterfaceDeclaration/");
+    }
+
     @TestMetadata("InheritingClasses")
     public void testInheritingClasses() throws Exception {
         runTest("idea/testData/decompiler/stubBuilder/InheritingClasses/");
@@ -157,6 +161,11 @@ public class ClsStubBuilderTestGenerated extends AbstractClsStubBuilderTest {
     @TestMetadata("Objects")
     public void testObjects() throws Exception {
         runTest("idea/testData/decompiler/stubBuilder/Objects/");
+    }
+
+    @TestMetadata("PrivateConstField")
+    public void testPrivateConstField() throws Exception {
+        runTest("idea/testData/decompiler/stubBuilder/PrivateConstField/");
     }
 
     @TestMetadata("PrivateToThis")

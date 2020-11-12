@@ -11,9 +11,8 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Comparing
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.util.TextRange
-import com.intellij.openapi.util.registry.Registry
 import com.intellij.psi.*
-import com.intellij.psi.impl.PsiSubstitutorImpl
+import com.intellij.psi.impl.InheritanceImplUtil
 import com.intellij.psi.impl.java.stubs.PsiJavaFileStub
 import com.intellij.psi.impl.source.PsiImmediateClassType
 import com.intellij.psi.impl.source.tree.TreeUtil
@@ -81,7 +80,7 @@ abstract class KtLightClassForSourceDeclaration(
 
     override fun getText() = kotlinOrigin.text ?: ""
 
-    override fun getTextRange(): TextRange = kotlinOrigin.textRange ?: TextRange.EMPTY_RANGE
+    override fun getTextRange(): TextRange? = kotlinOrigin.textRange ?: TextRange.EMPTY_RANGE
 
     override fun getTextOffset() = kotlinOrigin.textOffset
 
@@ -105,14 +104,12 @@ abstract class KtLightClassForSourceDeclaration(
     override val lightClassData: LightClassData
         get() = findLightClassData()
 
-    protected open fun findLightClassData() = getLightClassDataHolder().
-        findDataForClassOrObject(classOrObject)
+    protected open fun findLightClassData() = getLightClassDataHolder().findDataForClassOrObject(classOrObject)
 
     private fun getJavaFileStub(): PsiJavaFileStub = getLightClassDataHolder().javaFileStub
 
-    fun getDescriptor(): ClassDescriptor? {
-        return LightClassGenerationSupport.getInstance(project).resolveToDescriptor(classOrObject) as? ClassDescriptor
-    }
+    fun getDescriptor() =
+        LightClassGenerationSupport.getInstance(project).resolveToDescriptor(classOrObject) as? ClassDescriptor
 
     protected fun getLightClassDataHolder(): LightClassDataHolder.ForClass {
         val lightClassData = getLightClassDataHolder(classOrObject)
@@ -228,7 +225,14 @@ abstract class KtLightClassForSourceDeclaration(
         if (isAbstract() || isSealed()) {
             psiModifiers.add(PsiModifier.ABSTRACT)
         } else if (!(classOrObject.hasModifier(OPEN_KEYWORD) || (classOrObject is KtClass && classOrObject.isEnum()))) {
-            psiModifiers.add(PsiModifier.FINAL)
+            val descriptor = lazy { getDescriptor() }
+            var modifier = PsiModifier.FINAL
+            project.applyCompilerPlugins {
+                modifier = it.interceptModalityBuilding(kotlinOrigin, descriptor, modifier)
+            }
+            if (modifier == PsiModifier.FINAL) {
+                psiModifiers.add(PsiModifier.FINAL)
+            }
         }
 
         if (!classOrObject.isTopLevel() && !classOrObject.hasModifier(INNER_KEYWORD)) {
@@ -270,7 +274,12 @@ abstract class KtLightClassForSourceDeclaration(
         }
 
         val thisDescriptor = getDescriptor()
-        return qualifiedName != null && thisDescriptor != null && checkSuperTypeByFQName(thisDescriptor, qualifiedName, checkDeep)
+
+        return if (qualifiedName != null && thisDescriptor != null) {
+            checkSuperTypeByFQName(thisDescriptor, qualifiedName, checkDeep)
+        } else {
+            InheritanceImplUtil.isInheritor(this, baseClass, checkDeep)
+        }
     }
 
     @Throws(IncorrectOperationException::class)
@@ -345,15 +354,20 @@ abstract class KtLightClassForSourceDeclaration(
                 return null
             }
 
-            if (!forceUsingOldLightClasses && Registry.`is`("kotlin.use.ultra.light.classes", true)) {
-                LightClassGenerationSupport.getInstance(classOrObject.project).createUltraLightClass(classOrObject)?.let { return it }
+            if (!forceUsingOldLightClasses) {
+                LightClassGenerationSupport.getInstance(classOrObject.project).run {
+                    if (useUltraLightClasses) {
+                        return createUltraLightClass(classOrObject)
+                            ?: error { "Unable to create UL class for ${classOrObject.javaClass.name}" }
+                    }
+                }
             }
 
             return when {
                 classOrObject is KtObjectDeclaration && classOrObject.isObjectLiteral() ->
                     KtLightClassForAnonymousDeclaration(classOrObject)
 
-                classOrObject.isLocal ->
+                classOrObject.safeIsLocal() ->
                     KtLightClassForLocalDeclaration(classOrObject)
 
                 else ->
@@ -366,9 +380,9 @@ abstract class KtLightClassForSourceDeclaration(
                 return InvalidLightClassDataHolder
             }
 
-            val containingScript = classOrObject.containingKtFile.script
+            val containingScript = classOrObject.containingKtFile.safeScript()
             return when {
-                !classOrObject.isLocal && containingScript != null ->
+                !classOrObject.safeIsLocal() && containingScript != null ->
                     KtLightClassForScript.getLightClassCachedValue(containingScript).value
                 else ->
                     getLightClassCachedValue(classOrObject).value
@@ -481,7 +495,7 @@ abstract class KtLightClassForSourceDeclaration(
             return PsiSubstitutor.EMPTY
         }
         val javaLangEnumsTypeParameter = ancestor.typeParameters.firstOrNull() ?: return PsiSubstitutor.EMPTY
-        return PsiSubstitutorImpl.createSubstitutor(
+        return PsiSubstitutor.createSubstitutor(
             mapOf(
                 javaLangEnumsTypeParameter to PsiImmediateClassType(this, PsiSubstitutor.EMPTY)
             )
@@ -536,6 +550,12 @@ fun KtClassOrObject.defaultJavaAncestorQualifiedName(): String? {
 }
 
 fun KtClassOrObject.shouldNotBeVisibleAsLightClass(): Boolean {
+
+    if (containingFile is KtCodeFragment) {
+        // Avoid building light classes for code fragments
+        return true
+    }
+
     if (parentsWithSelf.filterIsInstance<KtClassOrObject>().any { it.hasExpectModifier() }) {
         return true
     }

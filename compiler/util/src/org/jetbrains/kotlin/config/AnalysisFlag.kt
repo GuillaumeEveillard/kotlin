@@ -5,7 +5,6 @@
 
 package org.jetbrains.kotlin.config
 
-import org.jetbrains.kotlin.utils.Jsr305State
 import kotlin.properties.ReadOnlyProperty
 import kotlin.reflect.KProperty
 
@@ -30,12 +29,8 @@ class AnalysisFlag<out T> internal constructor(
             operator fun provideDelegate(instance: Any?, property: KProperty<*>) = Delegate(property.name, false)
         }
 
-        object Jsr305StateWarnByDefault {
-            operator fun provideDelegate(instance: Any?, property: KProperty<*>) = Delegate(property.name, Jsr305State.DEFAULT)
-        }
-
-        object JvmDefaultModeDisabledByDefault {
-            operator fun provideDelegate(instance: Any?, property: KProperty<*>) = Delegate(property.name, JvmDefaultMode.DISABLE)
+        object ApiModeDisabledByDefault {
+            operator fun provideDelegate(instance: Any?, property: KProperty<*>) = Delegate(property.name, ExplicitApiMode.DISABLED)
         }
 
         object ListOfStrings {

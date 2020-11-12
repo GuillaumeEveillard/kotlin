@@ -1,14 +1,11 @@
 // IGNORE_BACKEND: NATIVE
-// IGNORE_BACKEND: JS_IR
-// TODO: muted automatically, investigate should it be ran for JS or not
-// IGNORE_BACKEND: JS
 
 // WITH_RUNTIME
 
 import kotlin.test.assertEquals
 
 fun foo(x : String) : String {
-    assert("abz]".hashCode() == "aby|".hashCode())
+    assertEquals("abz]".hashCode(), "aby|".hashCode())
 
     when (x) {
         "abz]" -> return "abz"

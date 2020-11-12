@@ -10,6 +10,7 @@ import com.intellij.psi.impl.PsiImplUtil
 import com.intellij.psi.impl.PsiSuperMethodImplUtil
 import com.intellij.psi.impl.light.LightMethodBuilder
 import com.intellij.psi.impl.light.LightTypeParameterListBuilder
+import com.intellij.psi.util.MethodSignature
 import com.intellij.psi.util.MethodSignatureBackedByPsiMethod
 import org.jetbrains.kotlin.asJava.builder.LightMemberOrigin
 import org.jetbrains.kotlin.asJava.builder.LightMemberOriginForDeclaration
@@ -17,26 +18,83 @@ import org.jetbrains.kotlin.asJava.builder.MemberIndex
 import org.jetbrains.kotlin.asJava.elements.KtLightAbstractAnnotation
 import org.jetbrains.kotlin.asJava.elements.KtLightMethodImpl
 import org.jetbrains.kotlin.codegen.FunctionCodegen
+import org.jetbrains.kotlin.config.LanguageVersionSettingsImpl
+import org.jetbrains.kotlin.descriptors.ConstructorDescriptor
 import org.jetbrains.kotlin.descriptors.FunctionDescriptor
 import org.jetbrains.kotlin.load.java.BuiltinMethodsWithSpecialGenericSignature.getSpecialSignatureInfo
+import org.jetbrains.kotlin.load.java.descriptors.JavaMethodDescriptor
 import org.jetbrains.kotlin.load.kotlin.TypeMappingMode
 import org.jetbrains.kotlin.psi.KtDeclaration
 import org.jetbrains.kotlin.psi.KtFunction
 import org.jetbrains.kotlin.psi.KtProperty
 import org.jetbrains.kotlin.psi.KtTypeParameterListOwner
+import org.jetbrains.kotlin.resolve.DescriptorUtils
 import org.jetbrains.kotlin.resolve.jvm.diagnostics.JvmDeclarationOriginKind
-import org.jetbrains.kotlin.types.KotlinType
+import org.jetbrains.kotlin.types.RawType
+
+const val METHOD_INDEX_FOR_GETTER = 1
+const val METHOD_INDEX_FOR_SETTER = 2
+const val METHOD_INDEX_FOR_DEFAULT_CTOR = 3
+const val METHOD_INDEX_FOR_NO_ARG_OVERLOAD_CTOR = 4
+const val METHOD_INDEX_FOR_NON_ORIGIN_METHOD = 5
+const val METHOD_INDEX_FOR_SCRIPT_MAIN = 6
+const val METHOD_INDEX_BASE = 7
 
 internal abstract class KtUltraLightMethod(
     internal val delegate: PsiMethod,
     lightMemberOrigin: LightMemberOrigin?,
     protected val support: KtUltraLightSupport,
-    containingClass: KtLightClass
+    containingClass: KtLightClass,
+    private val methodIndex: Int
 ) : KtLightMethodImpl(
     { delegate },
     lightMemberOrigin,
     containingClass
 ), KtUltraLightElementWithNullabilityAnnotation<KtDeclaration, PsiMethod> {
+
+    private class KtUltraLightThrowsReferenceListBuilder(private val parentMethod: PsiMethod) :
+        KotlinLightReferenceListBuilder(parentMethod.manager, parentMethod.language, PsiReferenceList.Role.THROWS_LIST) {
+        override fun getParent() = parentMethod
+        override fun getContainingFile() = parentMethod.containingFile
+    }
+
+    protected fun computeThrowsList(methodDescriptor: FunctionDescriptor?): PsiReferenceList {
+        val builder = KtUltraLightThrowsReferenceListBuilder(parentMethod = this)
+
+        if (methodDescriptor !== null) {
+            for (ex in FunctionCodegen.getThrownExceptions(methodDescriptor, LanguageVersionSettingsImpl.DEFAULT)) {
+                val psiClassType = ex.defaultType.asPsiType(support, TypeMappingMode.DEFAULT, builder) as? PsiClassType
+                psiClassType ?: continue
+                builder.addReference(psiClassType)
+            }
+        }
+
+        return builder
+    }
+
+    protected fun computeCheckNeedToErasureParametersTypes(methodDescriptor: FunctionDescriptor?): Boolean {
+
+        if (methodDescriptor == null) return false
+
+        val hasSpecialSignatureInfo = methodDescriptor.getSpecialSignatureInfo()
+            ?.let { it.valueParametersSignature != null } ?: false
+        if (hasSpecialSignatureInfo) return true
+
+        // Workaround for KT-32245 that checks if this signature could be affected by KT-38406
+        if (!DescriptorUtils.isOverride(methodDescriptor)) return false
+
+        val hasStarProjectionParameterType = methodDescriptor.valueParameters
+            .any { parameter -> parameter.type.arguments.any { it.isStarProjection } }
+        if (!hasStarProjectionParameterType) return false
+
+        return methodDescriptor.overriddenDescriptors
+            .filterIsInstance<JavaMethodDescriptor>()
+            .any { it.valueParameters.any { parameter -> parameter.type is RawType } }
+    }
+
+    abstract override fun buildTypeParameterList(): PsiTypeParameterList
+
+    abstract val checkNeedToErasureParametersTypes: Boolean
 
     override val memberIndex: MemberIndex? = null
 
@@ -53,23 +111,6 @@ internal abstract class KtUltraLightMethod(
 
     // should be in super
     override fun isVarArgs() = PsiImplUtil.isVarArgs(this)
-
-    abstract override fun buildTypeParameterList(): PsiTypeParameterList
-
-    private val _throwsList: PsiReferenceList by lazyPub {
-        val list =
-            object : KotlinLightReferenceListBuilder(manager, language, PsiReferenceList.Role.THROWS_LIST) {
-                override fun getParent() = this@KtUltraLightMethod
-                override fun getContainingFile() = this@KtUltraLightMethod.containingFile
-            }
-        methodDescriptor?.let {
-            for (ex in FunctionCodegen.getThrownExceptions(it)) {
-                val psiClassType = ex.defaultType.asPsiType(support, TypeMappingMode.DEFAULT, list) as? PsiClassType ?: continue
-                list.addReference(psiClassType)
-            }
-        }
-        list
-    }
 
     private val _deprecated: Boolean by lazyPub { kotlinOrigin?.isDeprecated(support) ?: false }
 
@@ -90,18 +131,18 @@ internal abstract class KtUltraLightMethod(
     override fun findSuperMethods(parentClass: PsiClass?): Array<out PsiMethod> =
         PsiSuperMethodImplUtil.findSuperMethods(this, parentClass)
 
-    override fun getThrowsList(): PsiReferenceList = _throwsList
+    override fun getSignature(substitutor: PsiSubstitutor): MethodSignature =
+        MethodSignatureBackedByPsiMethod.create(this, substitutor)
 
-    abstract val methodDescriptor: FunctionDescriptor?
-
-    val checkNeedToErasureParametersTypes: Boolean by lazyPub {
-        methodDescriptor
-            ?.getSpecialSignatureInfo()
-            ?.let { it.valueParametersSignature !== null }
-            ?: false
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is KtUltraLightMethod) return false
+        if (methodIndex != other.methodIndex) return false
+        if (this.javaClass != other.javaClass) return false
+        if (containingClass != other.containingClass) return false
+        if (kotlinOrigin === null || other.kotlinOrigin === null) return false
+        return kotlinOrigin == other.kotlinOrigin
     }
-
-    override fun equals(other: Any?): Boolean = this === other
 
     override fun hashCode(): Int = name.hashCode()
 
@@ -113,35 +154,53 @@ internal class KtUltraLightMethodForSourceDeclaration(
     lightMemberOrigin: LightMemberOrigin?,
     support: KtUltraLightSupport,
     containingClass: KtLightClass,
-    private val forceToSkipNullabilityAnnotation: Boolean = false
+    private val forceToSkipNullabilityAnnotation: Boolean = false,
+    methodIndex: Int
 ) : KtUltraLightMethod(
     delegate,
     lightMemberOrigin,
     support,
-    containingClass
+    containingClass,
+    methodIndex
 ) {
     constructor(
         delegate: PsiMethod,
         declaration: KtDeclaration,
         support: KtUltraLightSupport,
-        containingClass: KtLightClass
-    ) : this(delegate, LightMemberOriginForDeclaration(declaration, JvmDeclarationOriginKind.OTHER), support, containingClass)
+        containingClass: KtLightClass,
+        methodIndex: Int
+    ) : this(
+        delegate,
+        LightMemberOriginForDeclaration(declaration, JvmDeclarationOriginKind.OTHER),
+        support,
+        containingClass,
+        forceToSkipNullabilityAnnotation = false,
+        methodIndex
+    )
 
-    override val kotlinTypeForNullabilityAnnotation: KotlinType?
-        get() = if (forceToSkipNullabilityAnnotation) null else kotlinOrigin?.getKotlinType()
+    override val qualifiedNameForNullabilityAnnotation: String?
+        get() {
+            val typeForAnnotation = if (forceToSkipNullabilityAnnotation) null else kotlinOrigin?.getKotlinType()
+            return computeQualifiedNameForNullabilityAnnotation(typeForAnnotation)
+        }
 
     override fun buildTypeParameterList(): PsiTypeParameterList {
         val origin = kotlinOrigin
         return if (origin is KtFunction || origin is KtProperty)
-            buildTypeParameterList(origin as KtTypeParameterListOwner, this, support)
+            buildTypeParameterListForSourceDeclaration(origin as KtTypeParameterListOwner, this, support)
         else LightTypeParameterListBuilder(manager, language)
     }
 
-    override val methodDescriptor = kotlinOrigin?.resolve() as? FunctionDescriptor
+    private val methodDescriptor get() = kotlinOrigin?.resolve() as? FunctionDescriptor
+
+    private val _throwsList: PsiReferenceList by lazyPub { computeThrowsList(methodDescriptor) }
+    override fun getThrowsList(): PsiReferenceList = _throwsList
+
+    override val checkNeedToErasureParametersTypes: Boolean by lazyPub { computeCheckNeedToErasureParametersTypes(methodDescriptor) }
 }
 
 internal class KtUltraLightMethodForDescriptor(
-    override val methodDescriptor: FunctionDescriptor,
+    methodDescriptor: FunctionDescriptor,
     delegate: LightMethodBuilder,
     lightMemberOrigin: LightMemberOrigin?,
     support: KtUltraLightSupport,
@@ -150,13 +209,65 @@ internal class KtUltraLightMethodForDescriptor(
     delegate,
     lightMemberOrigin,
     support,
-    containingClass
+    containingClass,
+    METHOD_INDEX_FOR_NON_ORIGIN_METHOD
 ) {
-    override fun buildTypeParameterList() = buildTypeParameterList(methodDescriptor, this, support)
+    // This is greedy realization of UL class.
+    // This means that all data that depends on descriptor evaluated in ctor so the descriptor will be released on the end.
+    // Be aware to save descriptor in class instance or any depending references
 
-    override val kotlinTypeForNullabilityAnnotation: KotlinType?
-        get() = methodDescriptor.returnType
+    private val lazyInitializers = mutableListOf<Lazy<*>>()
+    private inline fun <T> getAndAddLazy(crossinline initializer: () -> T): Lazy<T> =
+        lazyPub { initializer() }.also { lazyInitializers.add(it) }
 
-    override val givenAnnotations: List<KtLightAbstractAnnotation>
-        get() = methodDescriptor.obtainLightAnnotations(support, this)
+
+    private val _buildTypeParameterList by getAndAddLazy {
+        buildTypeParameterListForDescriptor(methodDescriptor, this, support)
+    }
+
+    override fun buildTypeParameterList() = _buildTypeParameterList
+
+    private val _throwsList: PsiReferenceList by getAndAddLazy {
+        computeThrowsList(methodDescriptor)
+    }
+
+    override fun getThrowsList(): PsiReferenceList = _throwsList
+
+    override val givenAnnotations: List<KtLightAbstractAnnotation> by getAndAddLazy {
+        methodDescriptor.obtainLightAnnotations(support, this)
+    }
+
+    override val qualifiedNameForNullabilityAnnotation: String? by getAndAddLazy {
+        computeQualifiedNameForNullabilityAnnotation(methodDescriptor.returnType)
+    }
+
+    override val checkNeedToErasureParametersTypes: Boolean by getAndAddLazy {
+        computeCheckNeedToErasureParametersTypes(methodDescriptor)
+    }
+
+    init {
+        methodDescriptor.extensionReceiverParameter?.let { receiver ->
+            delegate.addParameter(KtUltraLightParameterForDescriptor(receiver, support, this))
+        }
+
+        for (valueParameter in methodDescriptor.valueParameters) {
+            delegate.addParameter(KtUltraLightParameterForDescriptor(valueParameter, support, this))
+        }
+
+        val returnType = if (methodDescriptor is ConstructorDescriptor) {
+            delegate.isConstructor = true
+            PsiType.VOID
+        } else {
+            support.mapType(methodDescriptor.returnType, this) { typeMapper, signatureWriter ->
+                typeMapper.mapReturnType(methodDescriptor, signatureWriter)
+            }
+        }
+        delegate.setMethodReturnType(returnType)
+
+        //We should force computations on all lazy delegates to release descriptor on the end of ctor call
+        with(lazyInitializers) {
+            forEach { it.value }
+            clear()
+        }
+    }
 }

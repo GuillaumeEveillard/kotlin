@@ -12,6 +12,12 @@ import org.junit.Test
 import javax.script.*
 import kotlin.script.experimental.jvmhost.jsr223.KotlinJsr223ScriptEngineImpl
 
+// duplicating it here to avoid dependency on the implementation - it may interfere with tests
+private const val KOTLIN_JSR223_RESOLVE_FROM_CLASSLOADER_PROPERTY = "kotlin.jsr223.experimental.resolve.dependencies.from.context.classloader"
+
+@Suppress("unused") // accessed from the tests below
+val shouldBeVisibleFromRepl = 7
+
 class KotlinJsr223ScriptEngineIT {
 
     init {
@@ -57,6 +63,17 @@ class KotlinJsr223ScriptEngineIT {
         Assert.assertNull(res1)
         val res2 = engine.eval("x + 2")
         Assert.assertEquals(5, res2)
+    }
+
+    @Test
+    fun testIncomplete() {
+        val engine = ScriptEngineManager().getEngineByExtension("kts")!!
+        val res0 = try {
+            engine.eval("val x =")
+        } catch (e: ScriptException) {
+            e
+        }
+        Assert.assertTrue("Unexpected check results: $res0", (res0 as? ScriptException)?.message?.contains("Expecting an expression") ?: false)
     }
 
     @Test
@@ -138,7 +155,7 @@ obj
 //        assertThrows(NoSuchMethodException::class.java) {
 //            invocator!!.invokeMethod(res1, "fn", 3)
 //        }
-        val res3 = invocator!!.invokeMethod(res1, "fn1", 3)
+        val res3 = invocator.invokeMethod(res1, "fn1", 3)
         Assert.assertEquals(6, res3)
     }
 
@@ -271,6 +288,26 @@ obj
 
         Assert.assertTrue(result is Function0<*>)
         Assert.assertEquals(3, (result as Function0<*>).invoke())
+    }
+
+    @Test
+    fun testResolveFromContextStandard() {
+        val scriptEngine = ScriptEngineManager().getEngineByExtension("kts")!!
+        val result = scriptEngine.eval("kotlin.script.experimental.jsr223.test.shouldBeVisibleFromRepl * 6")
+        Assert.assertEquals(42, result)
+    }
+
+    @Test
+    fun testResolveFromContextDirectExperimental() {
+        val prevProp = System.setProperty(KOTLIN_JSR223_RESOLVE_FROM_CLASSLOADER_PROPERTY, "true")
+        try {
+            val scriptEngine = ScriptEngineManager().getEngineByExtension("kts")!!
+            val result = scriptEngine.eval("kotlin.script.experimental.jsr223.test.shouldBeVisibleFromRepl * 6")
+            Assert.assertEquals(42, result)
+        } finally {
+            if (prevProp == null) System.clearProperty(KOTLIN_JSR223_RESOLVE_FROM_CLASSLOADER_PROPERTY)
+            else System.setProperty(KOTLIN_JSR223_RESOLVE_FROM_CLASSLOADER_PROPERTY, prevProp)
+        }
     }
 }
 

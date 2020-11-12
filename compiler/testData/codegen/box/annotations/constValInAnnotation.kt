@@ -16,4 +16,3 @@ annotation class Anno(val value: Int) {
 
 fun box(): String =
         if ((Foo::class.java.annotations.single() as Anno).value == 42) "OK" else "Fail"
-

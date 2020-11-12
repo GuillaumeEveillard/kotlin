@@ -1,7 +1,5 @@
-// !LANGUAGE: +AllowContractsForCustomFunctions +UseCallsInPlaceEffect +ReadDeserializedContracts
 // !USE_EXPERIMENTAL: kotlin.contracts.ExperimentalContracts
-// IGNORE_BACKEND: JVM_IR, NATIVE
-// IGNORE_BACKEND_MULTI_MODULE: JVM_IR
+// IGNORE_BACKEND: NATIVE
 // NO_CHECK_LAMBDA_INLINING
 // FILE: 1.kt
 
@@ -13,36 +11,27 @@ interface SomeOutputScreenCallbacks {
     fun ontest()
 }
 
-@ExperimentalContracts
 class OutputWorkScreenView(callbacks: SomeOutputScreenCallbacks) {
     val root = vBox {
         button(callbacks::ontest)
     }
 }
 
-@ExperimentalContracts
-inline fun vBox(
-    crossinline action: () -> Unit
-) {
+inline fun vBox(crossinline action: () -> Unit) {
     contract {
         callsInPlace(action, InvocationKind.EXACTLY_ONCE)
     }
     return { action() }()
 }
 
-@ExperimentalContracts
-inline fun button(
-    onAction: () -> Unit
-) {
+inline fun button(onAction: () -> Unit) {
     onAction()
 }
 
 // FILE: 2.kt
 
 import test.*
-import kotlin.contracts.*
 
-@ExperimentalContracts
 fun box(): String {
     var res = "FAIL"
     OutputWorkScreenView(object : SomeOutputScreenCallbacks {

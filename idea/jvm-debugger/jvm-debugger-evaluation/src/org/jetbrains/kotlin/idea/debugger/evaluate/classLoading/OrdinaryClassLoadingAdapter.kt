@@ -22,11 +22,11 @@ import com.intellij.openapi.projectRoots.JavaSdkVersion
 import com.sun.jdi.ClassLoaderReference
 import com.sun.jdi.ClassType
 import org.jetbrains.kotlin.idea.debugger.evaluate.ExecutionContext
+import org.jetbrains.kotlin.idea.debugger.evaluate.KotlinDebuggerEvaluationBundle
 import org.jetbrains.kotlin.idea.debugger.isDexDebug
-import org.jetbrains.org.objectweb.asm.ClassReader
-import org.jetbrains.org.objectweb.asm.ClassVisitor
-import org.jetbrains.org.objectweb.asm.ClassWriter
-import org.jetbrains.org.objectweb.asm.Opcodes
+import org.jetbrains.org.objectweb.asm.*
+import org.jetbrains.org.objectweb.asm.commons.InstructionAdapter
+import kotlin.jvm.internal.Lambda
 
 class OrdinaryClassLoadingAdapter : ClassLoadingAdapter {
     private companion object {
@@ -37,27 +37,52 @@ class OrdinaryClassLoadingAdapter : ClassLoadingAdapter {
         private val LAMBDA_SUPERCLASSES = listOf(ClassBytes("kotlin.jvm.internal.Lambda"))
 
         // Copied from com.intellij.debugger.ui.impl.watch.CompilingEvaluator.changeSuperToMagicAccessor
-        fun changeSuperToMagicAccessor(bytes: ByteArray): ByteArray {
+        fun patchClass(bytes: ByteArray, useMagicAccessor: Boolean): ByteArray {
             val classWriter = ClassWriter(0)
             val classVisitor = object : ClassVisitor(Opcodes.API_VERSION, classWriter) {
-                override fun visit(
-                    version: Int,
-                    access: Int,
-                    name: String,
-                    signature: String?,
-                    superName: String?,
-                    interfaces: Array<String>?
-                ) {
+                private var superName: String? = null
+
+                override fun visit(version: Int, access: Int, name: String, sig: String?, superName: String?, interfaces: Array<String>?) {
                     var newSuperName = superName
-                    if ("java/lang/Object" == newSuperName) {
+                    if (useMagicAccessor && "java/lang/Object" == newSuperName) {
                         newSuperName = "sun/reflect/MagicAccessorImpl"
                     }
 
-                    super.visit(version, access, name, signature, newSuperName, interfaces)
+                    this.superName = newSuperName
+                    super.visit(version, access, name, sig, newSuperName, interfaces)
+                }
+
+                override fun visitEnd() {
+                    if (superName == "kotlin/jvm/internal/Lambda") {
+                        generateLambdaToString(this)
+                    }
                 }
             }
+
             ClassReader(bytes).accept(classVisitor, 0)
             return classWriter.toByteArray()
+        }
+
+        private fun generateLambdaToString(classVisitor: ClassVisitor) {
+            val stringBuilderType = Type.getType(StringBuilder::class.java)
+            val lambdaType = Type.getType(Lambda::class.java)
+
+            val methodVisitor = classVisitor.visitMethod(Opcodes.ACC_PUBLIC, "toString", "()Ljava/lang/String;", null, null)
+            InstructionAdapter(methodVisitor).apply {
+                visitCode()
+                anew(stringBuilderType)
+                dup()
+                invokespecial(stringBuilderType.internalName, "<init>", "()V", false)
+                aconst(lambdaType.className + "#")
+                invokevirtual(stringBuilderType.internalName, "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;", false)
+                load(0, lambdaType)
+                invokevirtual("java/lang/Object", "hashCode", "()I", false)
+                invokevirtual(stringBuilderType.internalName, "append", "(I)Ljava/lang/StringBuilder;", false)
+                invokevirtual(stringBuilderType.internalName, "toString", "()Ljava/lang/String;", false)
+                areturn(Type.getType(String::class.java))
+                visitMaxs(2, 1)
+                visitEnd()
+            }
         }
 
         fun useMagicAccessor(context: ExecutionContext): Boolean {
@@ -77,13 +102,13 @@ class OrdinaryClassLoadingAdapter : ClassLoadingAdapter {
         val classLoader = try {
             ClassLoadingUtils.getClassLoader(context.evaluationContext, process)
         } catch (e: Exception) {
-            throw EvaluateException("Error creating evaluation class loader: $e", e)
+            throw EvaluateException(KotlinDebuggerEvaluationBundle.message("error.creating.class.loader", e.toString()), e)
         }
 
         try {
             defineClasses(classes, context, classLoader)
         } catch (e: Exception) {
-            throw EvaluateException("Error during classes definition $e", e)
+            throw EvaluateException(KotlinDebuggerEvaluationBundle.message("error.class.definition", e.toString()), e)
         }
 
         return classLoader
@@ -105,7 +130,7 @@ class OrdinaryClassLoadingAdapter : ClassLoadingAdapter {
         }
 
         for ((className, _, bytes) in classesToLoad) {
-            val patchedBytes = if (useMagicAccessor(context)) changeSuperToMagicAccessor(bytes) else bytes
+            val patchedBytes = patchClass(bytes, useMagicAccessor(context))
             defineClass(className, patchedBytes, context, classLoader)
         }
     }
@@ -133,7 +158,7 @@ class OrdinaryClassLoadingAdapter : ClassLoadingAdapter {
     private class ClassBytes(val name: String) {
         val bytes: ByteArray by lazy {
             val inputStream = this::class.java.classLoader.getResourceAsStream(name.replace('.', '/') + ".class")
-                ?: throw EvaluateException("Couldn't find $name class in current class loader")
+                ?: throw EvaluateException(KotlinDebuggerEvaluationBundle.message("error.cant.find.class", name))
 
             inputStream.use {
                 it.readBytes()

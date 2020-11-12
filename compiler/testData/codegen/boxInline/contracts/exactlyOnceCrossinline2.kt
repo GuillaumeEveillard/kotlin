@@ -1,13 +1,10 @@
-// !LANGUAGE: +AllowContractsForCustomFunctions +UseCallsInPlaceEffect +ReadDeserializedContracts
 // !USE_EXPERIMENTAL: kotlin.contracts.ExperimentalContracts
-// IGNORE_BACKEND: JVM_IR, NATIVE
-// IGNORE_BACKEND_MULTI_MODULE: JVM_IR
+// IGNORE_BACKEND: NATIVE
 // FILE: 1.kt
 package test
 
 import kotlin.contracts.*
 
-@ExperimentalContracts
 class A {
     var res = "FAIL"
 
@@ -24,7 +21,6 @@ class A {
     }
 }
 
-@ExperimentalContracts
 inline fun baz(crossinline exactly_once: () -> Unit) {
     contract {
         callsInPlace(exactly_once, InvocationKind.EXACTLY_ONCE)

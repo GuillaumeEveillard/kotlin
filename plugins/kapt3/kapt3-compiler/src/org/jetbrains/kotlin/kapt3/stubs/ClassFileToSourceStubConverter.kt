@@ -25,6 +25,8 @@ import com.sun.tools.javac.tree.TreeMaker
 import com.sun.tools.javac.tree.TreeScanner
 import kotlinx.kapt.KaptIgnored
 import org.jetbrains.kotlin.base.kapt3.KaptFlag
+import org.jetbrains.kotlin.builtins.StandardNames
+import org.jetbrains.kotlin.codegen.AsmUtil
 import org.jetbrains.kotlin.codegen.coroutines.CONTINUATION_PARAMETER_NAME
 import org.jetbrains.kotlin.codegen.needsExperimentalCoroutinesWrapper
 import org.jetbrains.kotlin.config.LanguageFeature
@@ -49,23 +51,27 @@ import org.jetbrains.kotlin.load.java.sources.JavaSourceElement
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.resolve.BindingContext
-import org.jetbrains.kotlin.resolve.DescriptorUtils
+import org.jetbrains.kotlin.resolve.DelegatingBindingTrace
 import org.jetbrains.kotlin.resolve.calls.callUtil.getResolvedCall
 import org.jetbrains.kotlin.resolve.calls.model.DefaultValueArgument
 import org.jetbrains.kotlin.resolve.calls.model.ResolvedValueArgument
 import org.jetbrains.kotlin.resolve.constants.*
+import org.jetbrains.kotlin.resolve.constants.evaluate.ConstantExpressionEvaluator
 import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameOrNull
 import org.jetbrains.kotlin.resolve.descriptorUtil.fqNameSafe
 import org.jetbrains.kotlin.resolve.descriptorUtil.getSuperClassOrAny
+import org.jetbrains.kotlin.resolve.descriptorUtil.isCompanionObject
 import org.jetbrains.kotlin.resolve.source.PsiSourceElement
 import org.jetbrains.kotlin.types.ErrorUtils
 import org.jetbrains.kotlin.types.KotlinType
 import org.jetbrains.kotlin.types.isError
+import org.jetbrains.kotlin.types.typeUtil.isEnum
 import org.jetbrains.org.objectweb.asm.Opcodes
 import org.jetbrains.org.objectweb.asm.Type
 import org.jetbrains.org.objectweb.asm.tree.*
 import java.io.File
 import javax.lang.model.element.ElementKind
+import kotlin.math.sign
 import com.sun.tools.javac.util.List as JavacList
 
 class ClassFileToSourceStubConverter(val kaptContext: KaptContextForStubGeneration, val generateNonExistentClass: Boolean) {
@@ -91,6 +97,8 @@ class ClassFileToSourceStubConverter(val kaptContext: KaptContextForStubGenerati
             "kotlin.jvm." // Kotlin annotations from runtime
         )
 
+        private val KOTLIN_METADATA_ANNOTATION = Metadata::class.java.name
+
         private val NON_EXISTENT_CLASS_NAME = FqName("error.NonExistentClass")
 
         private val JAVA_KEYWORD_FILTER_REGEX = "[a-z]+".toRegex()
@@ -103,6 +111,7 @@ class ClassFileToSourceStubConverter(val kaptContext: KaptContextForStubGenerati
 
     private val correctErrorTypes = kaptContext.options[KaptFlag.CORRECT_ERROR_TYPES]
     private val strictMode = kaptContext.options[KaptFlag.STRICT]
+    private val stripMetadata = kaptContext.options[KaptFlag.STRIP_METADATA]
 
     private val mutableBindings = mutableMapOf<String, KaptJavaFileObject>()
 
@@ -644,13 +653,43 @@ class ClassFileToSourceStubConverter(val kaptContext: KaptContextForStubGenerati
     private fun convertPropertyInitializer(field: FieldNode): JCExpression? {
         val value = field.value
 
+        val origin = kaptContext.origins[field]
+
+        val propertyInitializer = when (val declaration = origin?.element) {
+            is KtProperty -> declaration.initializer
+            is KtParameter -> if (kaptContext.options[KaptFlag.DUMP_DEFAULT_PARAMETER_VALUES]) declaration.defaultValue else null
+            else -> null
+        }
+
         if (value != null) {
-            val propertyInitializer = (kaptContext.origins[field]?.element as? KtProperty)?.initializer
             if (propertyInitializer != null) {
                 return convertConstantValueArguments(value, listOf(propertyInitializer))
             }
 
             return convertValueOfPrimitiveTypeOrString(value)
+        }
+
+        val propertyType = (origin?.descriptor as? PropertyDescriptor)?.returnType
+
+        /*
+            Work-around for enum classes in companions.
+            In expressions "Foo.Companion.EnumClass", Java prefers static field over a type name, making the reference invalid.
+        */
+        if (propertyType != null && propertyType.isEnum()) {
+            val enumClass = propertyType.constructor.declarationDescriptor
+            if (enumClass is ClassDescriptor && enumClass.isInsideCompanionObject()) {
+                return null
+            }
+        }
+
+        if (propertyInitializer != null && propertyType != null) {
+            val constValue = getConstantValue(propertyInitializer, propertyType)
+            if (constValue != null) {
+                val asmValue = mapConstantValueToAsmRepresentation(constValue)
+                if (asmValue !== UnknownConstantValue) {
+                    return convertConstantValueArguments(asmValue, listOf(propertyInitializer))
+                }
+            }
         }
 
         if (isFinal(field.access)) {
@@ -659,6 +698,85 @@ class ClassFileToSourceStubConverter(val kaptContext: KaptContextForStubGenerati
         }
 
         return null
+    }
+
+    private fun DeclarationDescriptor.isInsideCompanionObject(): Boolean {
+        val parent = containingDeclaration ?: return false
+        if (parent.isCompanionObject()) {
+            return true
+        }
+
+        return parent.isInsideCompanionObject()
+    }
+
+    private object UnknownConstantValue
+
+    private fun getConstantValue(expression: KtExpression, expectedType: KotlinType): ConstantValue<*>? {
+        val moduleDescriptor = kaptContext.generationState.module
+        val languageVersionSettings = kaptContext.generationState.languageVersionSettings
+        val evaluator = ConstantExpressionEvaluator(moduleDescriptor, languageVersionSettings, kaptContext.project)
+        val trace = DelegatingBindingTrace(kaptContext.bindingContext, "Kapt")
+        val const = evaluator.evaluateExpression(expression, trace, expectedType)
+        if (const == null || const.isError || !const.canBeUsedInAnnotations || const.usesNonConstValAsConstant) {
+            return null
+        }
+        return const.toConstantValue(expectedType)
+    }
+
+    private fun mapConstantValueToAsmRepresentation(value: ConstantValue<*>): Any? {
+        return when (value) {
+            is ByteValue -> value.value
+            is CharValue -> value.value
+            is IntValue -> value.value
+            is LongValue -> value.value
+            is ShortValue -> value.value
+            is UByteValue -> value.value
+            is UShortValue -> value.value
+            is UIntValue -> value.value
+            is ULongValue -> value.value
+            is AnnotationValue -> {
+                val annotationDescriptor = value.value
+                val annotationNode = AnnotationNode(typeMapper.mapType(annotationDescriptor.type).descriptor)
+                val values = ArrayList<Any?>(annotationDescriptor.allValueArguments.size * 2)
+                for ((name, arg) in annotationDescriptor.allValueArguments) {
+                    val mapped = mapConstantValueToAsmRepresentation(arg)
+                    if (mapped === UnknownConstantValue) {
+                        return UnknownConstantValue
+                    }
+
+                    values += name.asString()
+                    values += mapped
+                }
+                annotationNode.values = values
+                return annotationNode
+            }
+            is ArrayValue -> {
+                val children = value.value
+                val result = ArrayList<Any?>(children.size)
+                for (child in children) {
+                    val mapped = mapConstantValueToAsmRepresentation(child)
+                    if (mapped === UnknownConstantValue) {
+                        return UnknownConstantValue
+                    }
+                    result += mapped
+                }
+                return result
+            }
+            is BooleanValue -> value.value
+            is DoubleValue -> value.value
+            is EnumValue -> {
+                val (classId, name) = value.value
+                val enumType = AsmUtil.asmTypeByClassId(classId)
+                return arrayOf(enumType.descriptor, name.asString())
+            }
+            is FloatValue -> value.value
+            is StringValue -> value.value
+            is NullValue -> null
+            else -> {
+                // KClassValue is intentionally omitted as incompatible with Java
+                UnknownConstantValue
+            }
+        }
     }
 
     private fun convertMethod(
@@ -695,6 +813,10 @@ class ClassFileToSourceStubConverter(val kaptContext: KaptContextForStubGenerati
                 method.access.toLong(),
             ElementKind.METHOD, packageFqName, visibleAnnotations, method.invisibleAnnotations, descriptor.annotations
         )
+
+        if (containingClass.isInterface() && !method.isAbstract() && !method.isStatic()) {
+            modifiers.flags = modifiers.flags or Flags.DEFAULT
+        }
 
         val asmReturnType = Type.getReturnType(method.desc)
         val jcReturnType = if (isConstructor) null else treeMaker.Type(asmReturnType)
@@ -853,8 +975,8 @@ class ClassFileToSourceStubConverter(val kaptContext: KaptContextForStubGenerati
                 && kaptContext.generationState.languageVersionSettings.supportsFeature(LanguageFeature.ReleaseCoroutines)
 
         return when (areCoroutinesReleased) {
-            true -> DescriptorUtils.CONTINUATION_INTERFACE_FQ_NAME_RELEASE
-            false -> DescriptorUtils.CONTINUATION_INTERFACE_FQ_NAME_EXPERIMENTAL
+            true -> StandardNames.CONTINUATION_INTERFACE_FQ_NAME_RELEASE
+            false -> StandardNames.CONTINUATION_INTERFACE_FQ_NAME_EXPERIMENTAL
         }
     }
 
@@ -930,7 +1052,12 @@ class ClassFileToSourceStubConverter(val kaptContext: KaptContextForStubGenerati
         invisibleAnnotations: List<AnnotationNode>?,
         descriptorAnnotations: Annotations
     ): JCModifiers {
+        var seenOverride = false
         fun convertAndAdd(list: JavacList<JCAnnotation>, annotation: AnnotationNode): JavacList<JCAnnotation> {
+            if (annotation.desc == "Ljava/lang/Override;") {
+                if (seenOverride) return list  // KT-34569: skip duplicate @Override annotations
+                seenOverride = true
+            }
             val annotationDescriptor = descriptorAnnotations.singleOrNull { checkIfAnnotationValueMatches(annotation, AnnotationValue(it)) }
             val annotationTree = convertAnnotation(annotation, packageFqName, annotationDescriptor) ?: return list
             return list.prepend(annotationTree)
@@ -938,6 +1065,11 @@ class ClassFileToSourceStubConverter(val kaptContext: KaptContextForStubGenerati
 
         var annotations = visibleAnnotations?.fold(JavacList.nil<JCAnnotation>(), ::convertAndAdd) ?: JavacList.nil()
         annotations = invisibleAnnotations?.fold(annotations, ::convertAndAdd) ?: annotations
+
+        if (isDeprecated(access)) {
+            val type = treeMaker.Type(Type.getType(java.lang.Deprecated::class.java))
+            annotations = annotations.append(treeMaker.Annotation(type, JavacList.nil()))
+        }
 
         val flags = when (kind) {
             ElementKind.ENUM -> access and CLASS_MODIFIERS and Opcodes.ACC_ABSTRACT.inv().toLong()
@@ -961,6 +1093,7 @@ class ClassFileToSourceStubConverter(val kaptContext: KaptContextForStubGenerati
 
         if (filtered) {
             if (BLACKLISTED_ANNOTATIONS.any { fqName.startsWith(it) }) return null
+            if (stripMetadata && fqName == KOTLIN_METADATA_ANNOTATION) return null
         }
 
         val ktAnnotation = (annotationDescriptor?.source as? PsiSourceElement)?.psi as? KtAnnotationEntry
@@ -1090,11 +1223,22 @@ class ClassFileToSourceStubConverter(val kaptContext: KaptContextForStubGenerati
     }
 
     private fun convertValueOfPrimitiveTypeOrString(value: Any?): JCExpression? {
+        fun specialFpValueNumerator(value: Double): Double = if (value.isNaN()) 0.0 else 1.0 * value.sign
         return when (value) {
             is Char -> treeMaker.Literal(TypeTag.CHAR, value.toInt())
             is Byte -> treeMaker.TypeCast(treeMaker.TypeIdent(TypeTag.BYTE), treeMaker.Literal(TypeTag.INT, value.toInt()))
             is Short -> treeMaker.TypeCast(treeMaker.TypeIdent(TypeTag.SHORT), treeMaker.Literal(TypeTag.INT, value.toInt()))
-            is Boolean, is Int, is Long, is Float, is Double, is String -> treeMaker.Literal(value)
+            is Boolean, is Int, is Long, is String -> treeMaker.Literal(value)
+            is Float ->
+                when {
+                    value.isFinite() -> treeMaker.Literal(value)
+                    else -> treeMaker.Binary(Tag.DIV, treeMaker.Literal(specialFpValueNumerator(value.toDouble()).toFloat()), treeMaker.Literal(0.0F))
+                }
+            is Double ->
+                when {
+                    value.isFinite() -> treeMaker.Literal(value)
+                    else -> treeMaker.Binary(Tag.DIV, treeMaker.Literal(specialFpValueNumerator(value)), treeMaker.Literal(0.0))
+                }
             else -> null
         }
     }

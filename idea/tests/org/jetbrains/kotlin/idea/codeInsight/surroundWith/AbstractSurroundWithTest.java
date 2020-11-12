@@ -24,6 +24,7 @@ import org.jetbrains.kotlin.test.KotlinTestUtils;
 import java.io.File;
 import java.util.List;
 
+@SuppressWarnings("deprecation")
 public abstract class AbstractSurroundWithTest extends LightCodeInsightTestCase {
 
     public void doTestWithIfSurrounder(String path) throws Exception {

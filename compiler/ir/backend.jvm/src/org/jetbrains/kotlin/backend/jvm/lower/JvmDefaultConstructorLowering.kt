@@ -6,10 +6,13 @@
 package org.jetbrains.kotlin.backend.jvm.lower
 
 import org.jetbrains.kotlin.backend.common.ClassLoweringPass
+import org.jetbrains.kotlin.backend.common.ir.copyAnnotationsFrom
 import org.jetbrains.kotlin.backend.common.ir.passTypeArgumentsFrom
 import org.jetbrains.kotlin.backend.common.lower.createIrBuilder
 import org.jetbrains.kotlin.backend.common.phaser.makeIrFilePhase
 import org.jetbrains.kotlin.backend.jvm.JvmBackendContext
+import org.jetbrains.kotlin.descriptors.ClassKind
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.builders.declarations.addConstructor
 import org.jetbrains.kotlin.ir.builders.irBlockBody
 import org.jetbrains.kotlin.ir.builders.irDelegatingConstructorCall
@@ -32,17 +35,25 @@ internal val jvmDefaultConstructorPhase = makeIrFilePhase(
 private class JvmDefaultConstructorLowering(val context: JvmBackendContext) : ClassLoweringPass {
 
     override fun lower(irClass: IrClass) {
-        val primaryConstructor = irClass.constructors.firstOrNull { it.isPrimary } ?: return
+        if (irClass.kind != ClassKind.CLASS || irClass.visibility == DescriptorVisibilities.LOCAL || irClass.isInline || irClass.isInner)
+            return
 
-        if (!primaryConstructor.valueParameters.all { it.hasDefaultValue() })
+        val primaryConstructor = irClass.constructors.firstOrNull { it.isPrimary } ?: return
+        if (DescriptorVisibilities.isPrivate(primaryConstructor.visibility))
+            return
+
+        if (primaryConstructor.valueParameters.isEmpty() || !primaryConstructor.valueParameters.all { it.hasDefaultValue() })
             return
 
         // Skip if the default constructor is already defined by user.
         if (irClass.constructors.any { it.valueParameters.isEmpty() })
             return
 
-        irClass.addConstructor().apply {
+        irClass.addConstructor {
+            visibility = primaryConstructor.visibility
+        }.apply {
             val irBuilder = context.createIrBuilder(this.symbol, startOffset, endOffset)
+            copyAnnotationsFrom(primaryConstructor)
             body = irBuilder.irBlockBody {
                 +irDelegatingConstructorCall(primaryConstructor).apply {
                     passTypeArgumentsFrom(irClass)

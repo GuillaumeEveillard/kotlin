@@ -6,12 +6,12 @@
 package org.jetbrains.kotlin.ir.backend.js.export
 
 import org.jetbrains.kotlin.backend.common.ir.isExpect
-import org.jetbrains.kotlin.backend.common.ir.isMethodOfAny
 import org.jetbrains.kotlin.config.CommonConfigurationKeys
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.Modality
-import org.jetbrains.kotlin.descriptors.Visibilities
+import org.jetbrains.kotlin.descriptors.DescriptorVisibilities
 import org.jetbrains.kotlin.ir.backend.js.*
+import org.jetbrains.kotlin.ir.backend.js.lower.ES6AddInternalParametersToConstructorPhase.*
 import org.jetbrains.kotlin.ir.backend.js.utils.getJsNameOrKotlinName
 import org.jetbrains.kotlin.ir.backend.js.utils.isJsExport
 import org.jetbrains.kotlin.ir.backend.js.utils.sanitizeName
@@ -21,13 +21,12 @@ import org.jetbrains.kotlin.ir.symbols.IrClassifierSymbol
 import org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol
 import org.jetbrains.kotlin.ir.types.*
 import org.jetbrains.kotlin.ir.util.*
-import org.jetbrains.kotlin.name.FqName
-import org.jetbrains.kotlin.name.FqNameUnsafe
+import org.jetbrains.kotlin.js.config.JSConfigurationKeys
 import org.jetbrains.kotlin.utils.addIfNotNull
 
 class ExportModelGenerator(val context: JsIrBackendContext) {
 
-    private fun generateExport(file: IrPackageFragment): List<ExportedDeclaration> {
+    fun generateExport(file: IrPackageFragment): List<ExportedDeclaration> {
         val namespaceFqName = file.fqName
         val exports = file.declarations.flatMap { declaration -> listOfNotNull(exportDeclaration(declaration)) }
         return when {
@@ -37,43 +36,18 @@ class ExportModelGenerator(val context: JsIrBackendContext) {
         }
     }
 
-    fun generateExport(module: IrModuleFragment): ExportedModule =
+    fun generateExport(modules: Iterable<IrModuleFragment>): ExportedModule =
         ExportedModule(
-            sanitizeName(context.configuration[CommonConfigurationKeys.MODULE_NAME]!!),
-            (context.externalPackageFragment.values + module.files).flatMap {
+            context.configuration[CommonConfigurationKeys.MODULE_NAME]!!,
+            context.configuration[JSConfigurationKeys.MODULE_KIND]!!,
+            (context.externalPackageFragment.values + modules.flatMap { it.files }).flatMap {
                 generateExport(it)
             }
         )
 
-    private fun getExportCandidate(declaration: IrDeclaration): IrDeclarationWithName? {
-        // Only actual public declarations with name can be exported
-        if (declaration !is IrDeclarationWithVisibility ||
-            declaration !is IrDeclarationWithName ||
-            declaration.visibility != Visibilities.PUBLIC ||
-            declaration.isExpect
-        ) {
-            return null
-        }
-
-        // Workaround to get property declarations instead of its lowered accessors.
-        if (declaration is IrSimpleFunction) {
-            val property = declaration.correspondingPropertySymbol?.owner
-            if (property != null) {
-                // Return property for getter accessors only to prevent
-                // returning it twice (for getter and setter) in the same scope
-                return if (property.getter == declaration)
-                    property
-                else
-                    null
-            }
-        }
-
-        return declaration
-    }
-
     private fun exportDeclaration(declaration: IrDeclaration): ExportedDeclaration? {
         val candidate = getExportCandidate(declaration) ?: return null
-        if (!shouldDeclarationBeExported(candidate)) return null
+        if (!shouldDeclarationBeExported(candidate, context)) return null
 
         return when (candidate) {
             is IrSimpleFunction -> exportFunction(candidate)
@@ -105,7 +79,8 @@ class ExportModelGenerator(val context: JsIrBackendContext) {
 
     private fun exportConstructor(constructor: IrConstructor): ExportedDeclaration? {
         if (!constructor.isPrimary) return null
-        val allValueParameters = listOfNotNull(constructor.extensionReceiverParameter) + constructor.valueParameters
+        val allValueParameters = listOfNotNull(constructor.extensionReceiverParameter) +
+            constructor.valueParameters.filterNot { it.origin === ES6_RESULT_TYPE_PARAMETER || it.origin === ES6_INIT_BOX_PARAMETER }
         return ExportedConstructor(allValueParameters.map { exportParameter(it) })
     }
 
@@ -137,7 +112,8 @@ class ExportModelGenerator(val context: JsIrBackendContext) {
             isMember = parentClass != null,
             isStatic = false,
             isAbstract = parentClass?.isInterface == false && property.modality == Modality.ABSTRACT,
-            ir = property
+            irGetter = property.getter,
+            irSetter = property.setter
         )
     }
 
@@ -145,10 +121,10 @@ class ExportModelGenerator(val context: JsIrBackendContext) {
         when (klass.kind) {
             ClassKind.ANNOTATION_CLASS,
             ClassKind.ENUM_CLASS,
-            ClassKind.ENUM_ENTRY,
-            ClassKind.OBJECT ->
+            ClassKind.ENUM_ENTRY ->
                 return Exportability.Prohibited("Class ${klass.fqNameWhenAvailable} with kind: ${klass.kind}")
 
+            ClassKind.OBJECT,
             ClassKind.CLASS,
             ClassKind.INTERFACE -> {
             }
@@ -164,16 +140,16 @@ class ExportModelGenerator(val context: JsIrBackendContext) {
         klass: IrClass
     ): ExportedDeclaration? {
         when (val exportability = classExportability(klass)) {
-            is Exportability.Prohibited -> return ErrorDeclaration(exportability.reason)
+            is Exportability.Prohibited -> error(exportability.reason)
             is Exportability.NotNeeded -> return null
         }
 
         val members = mutableListOf<ExportedDeclaration>()
-        val statics = mutableListOf<ExportedDeclaration>()
+        val nestedClasses = mutableListOf<ExportedClass>()
 
         for (declaration in klass.declarations) {
             val candidate = getExportCandidate(declaration) ?: continue
-            if (!shouldDeclarationBeExported(candidate)) continue
+            if (!shouldDeclarationBeExported(candidate, context)) continue
 
             when (candidate) {
                 is IrSimpleFunction ->
@@ -185,12 +161,21 @@ class ExportModelGenerator(val context: JsIrBackendContext) {
                 is IrProperty ->
                     members.addIfNotNull(exportProperty(candidate))
 
-                is IrClass ->
-                    statics.addIfNotNull(exportClass(candidate))
+                is IrClass -> {
+                    val ec = exportClass(candidate)
+                    if (ec is ExportedClass) {
+                        nestedClasses.add(ec)
+                    } else {
+                        members.addIfNotNull(ec)
+                    }
+                }
 
                 is IrField -> {
-                    assert(candidate.correspondingPropertySymbol != null) {
-                        "Properties without fields are not supported ${candidate.fqNameWhenAvailable}"
+                    assert(
+                        candidate.origin == IrDeclarationOrigin.FIELD_FOR_OBJECT_INSTANCE
+                                || candidate.correspondingPropertySymbol != null
+                    ) {
+                        "Unexpected field without property ${candidate.fqNameWhenAvailable}"
                     }
                 }
 
@@ -213,6 +198,27 @@ class ExportModelGenerator(val context: JsIrBackendContext) {
 
         val name = klass.getExportedIdentifier()
 
+        if (klass.kind == ClassKind.OBJECT) {
+            var t: ExportedType = ExportedType.InlineInterfaceType(members + nestedClasses)
+            if (superType != null)
+                t = ExportedType.IntersectionType(t, superType)
+
+            for (superInterface in superInterfaces) {
+                t = ExportedType.IntersectionType(t, superInterface)
+            }
+
+            return ExportedProperty(
+                name = name,
+                type = t,
+                mutable = false,
+                isMember = klass.parent is IrClass,
+                isStatic = true,
+                isAbstract = false,
+                irGetter = context.mapping.objectToGetInstanceFunction[klass]!!,
+                irSetter = null
+            )
+        }
+
         return ExportedClass(
             name = name,
             isInterface = klass.isInterface,
@@ -221,7 +227,7 @@ class ExportModelGenerator(val context: JsIrBackendContext) {
             superInterfaces = superInterfaces,
             typeParameters = typeParameters,
             members = members,
-            statics = statics,
+            nestedClasses = nestedClasses,
             ir = klass
         )
     }
@@ -279,11 +285,20 @@ class ExportModelGenerator(val context: JsIrBackendContext) {
 
             classifier is IrClassSymbol -> {
                 val klass = classifier.owner
-                when (val exportability = classExportability(klass)) {
-                    is Exportability.Prohibited -> ExportedType.ErrorType(exportability.reason)
-                    is Exportability.NotNeeded -> error("Not needed classes types cannot be used")
-                    else -> ExportedType.ClassType(
-                        klass.fqNameWhenAvailable!!.asString(),
+                val name = klass.fqNameWhenAvailable!!.asString()
+
+                when (klass.kind) {
+                    ClassKind.ANNOTATION_CLASS,
+                    ClassKind.ENUM_CLASS,
+                    ClassKind.ENUM_ENTRY ->
+                        ExportedType.ErrorType("Class $name with kind: ${klass.kind}")
+
+                    ClassKind.OBJECT ->
+                        ExportedType.TypeOf(name)
+
+                    ClassKind.CLASS,
+                    ClassKind.INTERFACE -> ExportedType.ClassType(
+                        name,
                         type.arguments.map { exportTypeArgument(it) }
                     )
                 }
@@ -302,20 +317,6 @@ class ExportModelGenerator(val context: JsIrBackendContext) {
             else identifier
         }
 
-    private fun shouldDeclarationBeExported(declaration: IrDeclarationWithName): Boolean {
-        if (declaration.fqNameWhenAvailable in context.additionalExportedDeclarations)
-            return true
-
-        if (declaration.isJsExport())
-            return true
-
-        return when (val parent = declaration.parent) {
-            is IrDeclarationWithName -> shouldDeclarationBeExported(parent)
-            is IrAnnotationContainer -> parent.isJsExport()
-            else -> false
-        }
-    }
-
     private fun functionExportability(function: IrSimpleFunction): Exportability {
         if (function.isInline && function.typeParameters.any { it.isReified })
             return Exportability.Prohibited("Inline reified function")
@@ -325,15 +326,26 @@ class ExportModelGenerator(val context: JsIrBackendContext) {
             return Exportability.NotNeeded
         if (function.origin == IrDeclarationOrigin.BRIDGE ||
             function.origin == JsLoweredDeclarationOrigin.BRIDGE_TO_EXTERNAL_FUNCTION ||
-            function.origin == IrDeclarationOrigin.FUNCTION_FOR_DEFAULT_PARAMETER
+            function.origin == IrDeclarationOrigin.FUNCTION_FOR_DEFAULT_PARAMETER ||
+            function.origin == JsLoweredDeclarationOrigin.OBJECT_GET_INSTANCE_FUNCTION
         ) {
             return Exportability.NotNeeded
         }
 
         if (function.isFakeOverriddenFromAny())
             return Exportability.NotNeeded
-        if (function.name.asString().endsWith("-impl"))
+
+
+        val nameString = function.name.asString()
+        if (nameString.endsWith("-impl"))
             return Exportability.NotNeeded
+
+
+        // Workaround in case IrDeclarationOrigin.FUNCTION_FOR_DEFAULT_PARAMETER is rewritten.
+        // TODO: Properly fix KT-41613
+        if (nameString.endsWith("\$") && function.valueParameters.any { "\$mask" in it.name.asString() }) {
+            return Exportability.NotNeeded
+        }
 
         val name = function.getExportedIdentifier()
         // TODO: Use [] syntax instead of prohibiting
@@ -352,6 +364,54 @@ sealed class Exportability {
 
 private val IrClassifierSymbol.isInterface
     get() = (owner as? IrClass)?.isInterface == true
+
+private fun getExportCandidate(declaration: IrDeclaration): IrDeclarationWithName? {
+    // Only actual public declarations with name can be exported
+    if (declaration !is IrDeclarationWithVisibility ||
+        declaration !is IrDeclarationWithName ||
+        declaration.visibility != DescriptorVisibilities.PUBLIC ||
+        declaration.isExpect
+    ) {
+        return null
+    }
+
+    // Workaround to get property declarations instead of its lowered accessors.
+    if (declaration is IrSimpleFunction) {
+        val property = declaration.correspondingPropertySymbol?.owner
+        if (property != null) {
+            // Return property for getter accessors only to prevent
+            // returning it twice (for getter and setter) in the same scope
+            return if (property.getter == declaration)
+                property
+            else
+                null
+        }
+    }
+
+    return declaration
+}
+
+private fun shouldDeclarationBeExported(declaration: IrDeclarationWithName, context: JsIrBackendContext): Boolean {
+    if (declaration.fqNameWhenAvailable in context.additionalExportedDeclarationNames)
+        return true
+
+    if (declaration in context.additionalExportedDeclarations)
+        return true
+
+    if (declaration.isJsExport())
+        return true
+
+    return when (val parent = declaration.parent) {
+        is IrDeclarationWithName -> shouldDeclarationBeExported(parent, context)
+        is IrAnnotationContainer -> parent.isJsExport()
+        else -> false
+    }
+}
+
+fun IrDeclaration.isExported(context: JsIrBackendContext): Boolean {
+    val candidate = getExportCandidate(this) ?: return false
+    return shouldDeclarationBeExported(candidate, context)
+}
 
 private val reservedWords = setOf(
     "break",

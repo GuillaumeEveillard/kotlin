@@ -37,7 +37,7 @@ class IrNamerImpl(private val newNameTables: NameTables) : IrNamer {
     }
 
     override fun getNameForField(field: IrField): JsName {
-        return if (field.isStatic) {
+        return if (field.isStatic || field.parent is IrScript) {
             getNameForStaticDeclaration(field)
         } else {
             getNameForMemberField(field)
@@ -72,5 +72,15 @@ class IrNamerImpl(private val newNameTables: NameTables) : IrNamer {
             else ->
                 error("Unsupported external class parent $parent")
         }
+    }
+
+    private val associatedObjectKeyMap = mutableMapOf<IrClass, Int>()
+
+    override fun getAssociatedObjectKey(irClass: IrClass): Int? {
+        if (irClass.isAssociatedObjectAnnotatedAnnotation) {
+
+            return associatedObjectKeyMap.getOrPut(irClass) { associatedObjectKeyMap.size }
+        }
+        return null
     }
 }

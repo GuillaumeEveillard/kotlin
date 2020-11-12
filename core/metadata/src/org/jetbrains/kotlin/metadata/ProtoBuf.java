@@ -8273,6 +8273,7 @@ public final class ProtoBuf {
      *isExternal
      *isExpect
      *isInline
+     *isFun
      * </pre>
      */
     boolean hasFlags();
@@ -8289,6 +8290,7 @@ public final class ProtoBuf {
      *isExternal
      *isExpect
      *isInline
+     *isFun
      * </pre>
      */
     int getFlags();
@@ -8914,6 +8916,7 @@ public final class ProtoBuf {
      *isExternal
      *isExpect
      *isInline
+     *isFun
      * </pre>
      */
     public boolean hasFlags() {
@@ -8932,6 +8935,7 @@ public final class ProtoBuf {
      *isExternal
      *isExpect
      *isInline
+     *isFun
      * </pre>
      */
     public int getFlags() {
@@ -10059,6 +10063,7 @@ public final class ProtoBuf {
        *isExternal
        *isExpect
        *isInline
+       *isFun
        * </pre>
        */
       public boolean hasFlags() {
@@ -10077,6 +10082,7 @@ public final class ProtoBuf {
        *isExternal
        *isExpect
        *isInline
+       *isFun
        * </pre>
        */
       public int getFlags() {
@@ -10095,6 +10101,7 @@ public final class ProtoBuf {
        *isExternal
        *isExpect
        *isInline
+       *isFun
        * </pre>
        */
       public Builder setFlags(int value) {
@@ -10116,6 +10123,7 @@ public final class ProtoBuf {
        *isExternal
        *isExpect
        *isInline
+       *isFun
        * </pre>
        */
       public Builder clearFlags() {
@@ -13308,6 +13316,7 @@ public final class ProtoBuf {
      *hasAnnotations
      *Visibility
      *isSecondary
+     *hasNonStableParameterNames
      * </pre>
      */
     boolean hasFlags();
@@ -13318,6 +13327,7 @@ public final class ProtoBuf {
      *hasAnnotations
      *Visibility
      *isSecondary
+     *hasNonStableParameterNames
      * </pre>
      */
     int getFlags();
@@ -13495,6 +13505,7 @@ public final class ProtoBuf {
      *hasAnnotations
      *Visibility
      *isSecondary
+     *hasNonStableParameterNames
      * </pre>
      */
     public boolean hasFlags() {
@@ -13507,6 +13518,7 @@ public final class ProtoBuf {
      *hasAnnotations
      *Visibility
      *isSecondary
+     *hasNonStableParameterNames
      * </pre>
      */
     public int getFlags() {
@@ -13862,6 +13874,7 @@ public final class ProtoBuf {
        *hasAnnotations
        *Visibility
        *isSecondary
+       *hasNonStableParameterNames
        * </pre>
        */
       public boolean hasFlags() {
@@ -13874,6 +13887,7 @@ public final class ProtoBuf {
        *hasAnnotations
        *Visibility
        *isSecondary
+       *hasNonStableParameterNames
        * </pre>
        */
       public int getFlags() {
@@ -13886,6 +13900,7 @@ public final class ProtoBuf {
        *hasAnnotations
        *Visibility
        *isSecondary
+       *hasNonStableParameterNames
        * </pre>
        */
       public Builder setFlags(int value) {
@@ -13901,6 +13916,7 @@ public final class ProtoBuf {
        *hasAnnotations
        *Visibility
        *isSecondary
+       *hasNonStableParameterNames
        * </pre>
        */
       public Builder clearFlags() {
@@ -14160,6 +14176,7 @@ public final class ProtoBuf {
      *isExternal
      *isSuspend
      *isExpect
+     *hasNonStableParameterNames
      * </pre>
      */
     boolean hasFlags();
@@ -14178,6 +14195,7 @@ public final class ProtoBuf {
      *isExternal
      *isSuspend
      *isExpect
+     *hasNonStableParameterNames
      * </pre>
      */
     int getFlags();
@@ -14532,6 +14550,7 @@ public final class ProtoBuf {
      *isExternal
      *isSuspend
      *isExpect
+     *hasNonStableParameterNames
      * </pre>
      */
     public boolean hasFlags() {
@@ -14552,6 +14571,7 @@ public final class ProtoBuf {
      *isExternal
      *isSuspend
      *isExpect
+     *hasNonStableParameterNames
      * </pre>
      */
     public int getFlags() {
@@ -15299,6 +15319,7 @@ public final class ProtoBuf {
        *isExternal
        *isSuspend
        *isExpect
+       *hasNonStableParameterNames
        * </pre>
        */
       public boolean hasFlags() {
@@ -15319,6 +15340,7 @@ public final class ProtoBuf {
        *isExternal
        *isSuspend
        *isExpect
+       *hasNonStableParameterNames
        * </pre>
        */
       public int getFlags() {
@@ -15339,6 +15361,7 @@ public final class ProtoBuf {
        *isExternal
        *isSuspend
        *isExpect
+       *hasNonStableParameterNames
        * </pre>
        */
       public Builder setFlags(int value) {
@@ -15362,6 +15385,7 @@ public final class ProtoBuf {
        *isExternal
        *isSuspend
        *isExpect
+       *hasNonStableParameterNames
        * </pre>
        */
       public Builder clearFlags() {

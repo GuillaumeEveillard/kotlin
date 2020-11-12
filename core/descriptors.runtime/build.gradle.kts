@@ -14,10 +14,8 @@ dependencies {
     testCompile(projectTests(":generators:test-generator"))
 
     testRuntimeOnly(intellijCoreDep()) { includeJars("intellij-core") }
-    Platform[192].orHigher {
-        testRuntimeOnly(intellijDep()) { includeJars("platform-concurrency") }
-        testRuntimeOnly(intellijPluginDep("jps-standalone")) { includeJars("jps-model") }
-    }
+    testRuntimeOnly(intellijDep()) { includeJars("platform-concurrency") }
+    testRuntimeOnly(jpsStandalone()) { includeJars("jps-model") }
 }
 
 sourceSets {
@@ -40,3 +38,5 @@ val generateTests by generator("org.jetbrains.kotlin.generators.tests.GenerateRu
 projectTest(parallel = true) {
     workingDir = rootDir
 }
+
+testsJar()

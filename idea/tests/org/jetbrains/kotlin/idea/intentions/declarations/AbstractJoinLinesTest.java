@@ -16,6 +16,7 @@ import org.jetbrains.kotlin.test.KotlinTestUtils;
 
 import java.io.File;
 
+@SuppressWarnings("deprecation")
 public abstract class AbstractJoinLinesTest extends LightCodeInsightTestCase {
     public void doTest(@NotNull String path) throws Exception {
         configureByFile(path);

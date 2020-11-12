@@ -1,95 +1,91 @@
 /*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
 package org.jetbrains.kotlin.fir.scopes.impl
 
-import org.jetbrains.kotlin.fir.declarations.FirCallableMemberDeclaration
-import org.jetbrains.kotlin.fir.declarations.FirConstructor
-import org.jetbrains.kotlin.fir.declarations.FirRegularClass
-import org.jetbrains.kotlin.fir.scopes.FirPosition
+import org.jetbrains.kotlin.fir.declarations.*
+import org.jetbrains.kotlin.fir.resolve.providers.FirSymbolProvider
+import org.jetbrains.kotlin.fir.resolve.substitution.ConeSubstitutor
+import org.jetbrains.kotlin.fir.resolve.transformers.ensureResolvedForCalls
+import org.jetbrains.kotlin.fir.scopes.FirContainingNamesAwareScope
 import org.jetbrains.kotlin.fir.scopes.FirScope
-import org.jetbrains.kotlin.fir.scopes.ProcessorAction
-import org.jetbrains.kotlin.fir.scopes.ProcessorAction.NEXT
-import org.jetbrains.kotlin.fir.scopes.ProcessorAction.STOP
-import org.jetbrains.kotlin.fir.service
+import org.jetbrains.kotlin.fir.scopes.getContainingClassifierNamesIfPresent
 import org.jetbrains.kotlin.fir.symbols.impl.*
 import org.jetbrains.kotlin.name.Name
 
-class FirClassDeclaredMemberScopeProvider {
-
-    val cache = mutableMapOf<FirRegularClass, FirClassDeclaredMemberScope>()
-    fun declaredMemberScope(klass: FirRegularClass): FirClassDeclaredMemberScope {
-        return cache.getOrPut(klass) {
-            FirClassDeclaredMemberScope(klass)
-        }
+class FirClassDeclaredMemberScope(
+    klass: FirClass<*>,
+    useLazyNestedClassifierScope: Boolean = false,
+    existingNames: List<Name>? = null,
+    symbolProvider: FirSymbolProvider? = null
+) : FirScope(), FirContainingNamesAwareScope {
+    private val nestedClassifierScope: FirScope? = if (useLazyNestedClassifierScope) {
+        lazyNestedClassifierScope(klass.symbol.classId, existingNames!!, symbolProvider!!)
+    } else {
+        nestedClassifierScope(klass)
     }
-}
 
-fun declaredMemberScope(klass: FirRegularClass): FirClassDeclaredMemberScope {
-    return klass
-        .session
-        .service<FirClassDeclaredMemberScopeProvider>()
-        .declaredMemberScope(klass)
-}
-
-class FirClassDeclaredMemberScope(klass: FirRegularClass) : FirScope() {
     private val callablesIndex: Map<Name, List<FirCallableSymbol<*>>> = run {
         val result = mutableMapOf<Name, MutableList<FirCallableSymbol<*>>>()
-        for (declaration in klass.declarations) {
+        loop@ for (declaration in klass.declarations) {
             when (declaration) {
                 is FirCallableMemberDeclaration<*> -> {
-                    val name = if (declaration is FirConstructor) klass.name else declaration.name
+                    val name = when (declaration) {
+                        is FirConstructor -> CONSTRUCTOR_NAME
+                        is FirVariable<*> -> declaration.name
+                        is FirSimpleFunction -> declaration.name
+                        else -> continue@loop
+                    }
                     result.getOrPut(name) { mutableListOf() } += declaration.symbol
                 }
-                is FirRegularClass -> {
-                    for (nestedDeclaration in declaration.declarations) {
-                        if (nestedDeclaration is FirConstructor) {
-                            result.getOrPut(declaration.name) { mutableListOf() } += nestedDeclaration.symbol
-                        }
-                    }
-                }
-            }
-        }
-        result
-    }
-    private val classIndex: Map<Name, FirClassSymbol> = run {
-        val result = mutableMapOf<Name, FirClassSymbol>()
-        for (declaration in klass.declarations) {
-            if (declaration is FirRegularClass) {
-                result[declaration.name] = declaration.symbol
             }
         }
         result
     }
 
-    override fun processFunctionsByName(name: Name, processor: (FirFunctionSymbol<*>) -> ProcessorAction): ProcessorAction {
-        val symbols = callablesIndex[name] ?: emptyList()
-        for (symbol in symbols) {
-            if (symbol is FirFunctionSymbol<*> && !processor(symbol)) {
-                return STOP
-            }
-        }
-        return NEXT
+    override fun processFunctionsByName(name: Name, processor: (FirFunctionSymbol<*>) -> Unit) {
+        if (name == CONSTRUCTOR_NAME) return
+        processCallables(name, processor)
     }
 
-    override fun processPropertiesByName(name: Name, processor: (FirCallableSymbol<*>) -> ProcessorAction): ProcessorAction {
-        val symbols = callablesIndex[name] ?: emptyList()
-        for (symbol in symbols) {
-            if (symbol is FirVariableSymbol && !processor(symbol)) {
-                return STOP
-            }
-        }
-        return NEXT
+    override fun processDeclaredConstructors(processor: (FirConstructorSymbol) -> Unit) {
+        processCallables(CONSTRUCTOR_NAME, processor)
     }
 
-    override fun processClassifiersByName(name: Name, position: FirPosition, processor: (FirClassifierSymbol<*>) -> Boolean): Boolean {
-        val matchedClass = classIndex[name]
-        if (matchedClass != null && !processor(matchedClass)) {
-            return false
-        }
+    override fun processPropertiesByName(name: Name, processor: (FirVariableSymbol<*>) -> Unit) {
+        processCallables(name, processor)
+    }
 
-        return super.processClassifiersByName(name, position, processor)
+    private inline fun <reified D : FirCallableSymbol<*>> processCallables(
+        name: Name,
+        processor: (D) -> Unit
+    ) {
+        val symbols = callablesIndex[name] ?: emptyList()
+        for (symbol in symbols) {
+            if (symbol is D) {
+                symbol.ensureResolvedForCalls(symbol.fir.session)
+                processor(symbol)
+            }
+        }
+    }
+
+    override fun processClassifiersByNameWithSubstitution(
+        name: Name,
+        processor: (FirClassifierSymbol<*>, ConeSubstitutor) -> Unit
+    ) {
+        nestedClassifierScope?.processClassifiersByNameWithSubstitution(name, processor)
+    }
+
+    override fun getCallableNames(): Set<Name> {
+        return callablesIndex.keys
+    }
+
+    override fun getClassifierNames(): Set<Name> {
+        return nestedClassifierScope?.getContainingClassifierNamesIfPresent().orEmpty()
     }
 }
+
+
+private val CONSTRUCTOR_NAME = Name.special("<init>")

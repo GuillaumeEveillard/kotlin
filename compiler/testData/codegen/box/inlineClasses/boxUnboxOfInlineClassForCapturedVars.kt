@@ -1,6 +1,6 @@
+// DONT_TARGET_EXACT_BACKEND: WASM
+// WASM_MUTE_REASON: UNIT_ISSUES
 // !LANGUAGE: +InlineClasses
-// IGNORE_BACKEND: JVM_IR
-// This test fails on JVM_IR because of a missing implicit cast from UInt? to UInt.
 
 inline class UInt(private val value: Int) {
     operator fun plus(other: UInt): UInt = UInt(value + other.asValue())

@@ -1,4 +1,4 @@
-// IGNORE_BACKEND: JVM_IR
+// IGNORE_BACKEND_FIR: JVM_IR
 // TARGET_BACKEND: JVM
 // FILE: A.kt
 
@@ -16,7 +16,7 @@ open class B : A() {
 
 open class C : B() {
     fun test(): String {
-        return super.publicField + super.internalField + super.protectedfield
+        return publicField + super.internalField + super.protectedfield
     }
 }
 

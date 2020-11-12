@@ -6,16 +6,16 @@
 package org.jetbrains.kotlin.ide.konan.analyzer
 
 import org.jetbrains.kotlin.analyzer.*
+import org.jetbrains.kotlin.caches.resolve.resolution
 import org.jetbrains.kotlin.config.LanguageVersionSettings
 import org.jetbrains.kotlin.container.get
 import org.jetbrains.kotlin.context.ModuleContext
 import org.jetbrains.kotlin.descriptors.impl.CompositePackageFragmentProvider
 import org.jetbrains.kotlin.descriptors.impl.ModuleDescriptorImpl
 import org.jetbrains.kotlin.frontend.di.createContainerForLazyResolve
-import org.jetbrains.kotlin.ide.konan.NativeLibraryInfo
-import org.jetbrains.kotlin.ide.konan.createPackageFragmentProvider
 import org.jetbrains.kotlin.platform.TargetPlatform
-import org.jetbrains.kotlin.platform.konan.KonanPlatforms
+import org.jetbrains.kotlin.platform.idePlatformKind
+import org.jetbrains.kotlin.platform.konan.NativePlatforms
 import org.jetbrains.kotlin.resolve.CodeAnalyzerInitializer
 import org.jetbrains.kotlin.resolve.TargetEnvironment
 import org.jetbrains.kotlin.resolve.konan.platform.NativePlatformAnalyzerServices
@@ -47,29 +47,26 @@ class NativeResolverForModuleFactory(
             moduleContext,
             declarationProviderFactory,
             CodeAnalyzerInitializer.getInstance(moduleContext.project).createTrace(),
-            KonanPlatforms.defaultKonanPlatform,
+            moduleDescriptor.platform!!,
             NativePlatformAnalyzerServices,
             targetEnvironment,
             languageVersionSettings
         )
 
-        val packageFragmentProvider = container.get<ResolveSession>().packageFragmentProvider
-        val fragmentProviders = mutableListOf(packageFragmentProvider)
+        var packageFragmentProvider = container.get<ResolveSession>().packageFragmentProvider
 
-        val moduleInfo = moduleContent.moduleInfo
+        val klibPackageFragmentProvider =
+            NativePlatforms.unspecifiedNativePlatform.idePlatformKind.resolution.createKlibPackageFragmentProvider(
+                moduleContent.moduleInfo,
+                moduleContext.storageManager,
+                languageVersionSettings,
+                moduleDescriptor
+            )
 
-        val konanLibrary = moduleInfo.getCapability(NativeLibraryInfo.NATIVE_LIBRARY_CAPABILITY)
-        if (konanLibrary != null) {
-            val libPackageFragmentProvider =
-                konanLibrary.createPackageFragmentProvider(
-                    moduleContext.storageManager,
-                    languageVersionSettings,
-                    moduleDescriptor
-                )
-
-            fragmentProviders.add(libPackageFragmentProvider)
+        if (klibPackageFragmentProvider != null) {
+            packageFragmentProvider = CompositePackageFragmentProvider(listOf(packageFragmentProvider, klibPackageFragmentProvider))
         }
 
-        return ResolverForModule(CompositePackageFragmentProvider(fragmentProviders), container)
+        return ResolverForModule(packageFragmentProvider, container)
     }
 }

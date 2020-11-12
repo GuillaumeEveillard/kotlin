@@ -1,6 +1,8 @@
 // !LANGUAGE: +MultiPlatformProjects
 // IGNORE_BACKEND: JS
 // IGNORE_BACKEND: JS_IR
+// IGNORE_BACKEND: JS_IR_ES6
+// IGNORE_BACKEND: NATIVE
 
 // MODULE: common
 // FILE: common.kt

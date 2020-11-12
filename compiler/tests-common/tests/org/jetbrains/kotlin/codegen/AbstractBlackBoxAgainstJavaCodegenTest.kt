@@ -18,11 +18,10 @@ package org.jetbrains.kotlin.codegen
 
 import org.jetbrains.kotlin.cli.jvm.config.addJvmClasspathRoot
 import org.jetbrains.kotlin.config.CompilerConfiguration
-import org.jetbrains.kotlin.config.JVMConfigurationKeys
 import java.io.File
 
 abstract class AbstractBlackBoxAgainstJavaCodegenTest : AbstractBlackBoxCodegenTest() {
-    override fun doMultiFileTest(wholeFile: File, files: MutableList<TestFile>) {
+    override fun doMultiFileTest(wholeFile: File, files: List<TestFile>) {
         javaClassesOutputDirectory = writeJavaFiles(files)!!.let { directory ->
             CodegenTestUtil.compileJava(CodegenTestUtil.findJavaSourcesInDirectory(directory), emptyList(), extractJavacOptions(files))
         }
@@ -36,11 +35,7 @@ abstract class AbstractBlackBoxAgainstJavaCodegenTest : AbstractBlackBoxCodegenT
     }
 
     override fun updateConfiguration(configuration: CompilerConfiguration) {
+        super.updateConfiguration(configuration)
         configuration.addJvmClasspathRoot(javaClassesOutputDirectory)
-
-        if (configuration.get(JVMConfigurationKeys.USE_FAST_CLASS_FILES_READING) == null) {
-            // By default (unless disabled in the test with a directive), use the fast class reading mode
-            configuration.put(JVMConfigurationKeys.USE_FAST_CLASS_FILES_READING, true)
-        }
     }
 }

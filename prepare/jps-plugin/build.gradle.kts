@@ -2,24 +2,11 @@ description = "Kotlin JPS plugin"
 
 plugins {
     java
-    id("pill-configurable")
 }
 
-val projectsToShadow = listOf(
-    ":core:type-system",
-    ":kotlin-build-common",
-    ":compiler:cli-common",
-    ":kotlin-compiler-runner",
-    ":daemon-common",
-    ":daemon-common-new",
-    ":core:descriptors",
-    ":core:descriptors.jvm",
-    ":idea:idea-jps-common",
-    ":jps-plugin",
-    ":kotlin-preloader",
-    ":compiler:util",
-    ":core:util.runtime"
-)
+val compilerComponents = rootProject.extra["compilerModulesForJps"] as List<String>
+
+val projectsToShadow = compilerComponents + listOf(":jps-plugin")
 
 dependencies {
     projectsToShadow.forEach {

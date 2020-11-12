@@ -6,8 +6,6 @@
 package org.jetbrains.kotlin.ir.backend.js.lower.coroutines
 
 import org.jetbrains.kotlin.backend.common.ir.isSuspend
-import org.jetbrains.kotlin.backend.common.pop
-import org.jetbrains.kotlin.backend.common.push
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.IrStatement
 import org.jetbrains.kotlin.ir.backend.js.ir.JsIrBuilder
@@ -19,6 +17,7 @@ import org.jetbrains.kotlin.ir.symbols.IrFieldSymbol
 import org.jetbrains.kotlin.ir.symbols.IrReturnableBlockSymbol
 import org.jetbrains.kotlin.ir.symbols.IrValueSymbol
 import org.jetbrains.kotlin.ir.types.IrType
+import org.jetbrains.kotlin.ir.types.isUnit
 import org.jetbrains.kotlin.ir.visitors.*
 
 object COROUTINE_ROOT_LOOP : IrStatementOriginImpl("COROUTINE_ROOT_LOOP")
@@ -28,12 +27,12 @@ open class SuspendableNodesCollector(private val suspendableNodes: MutableSet<Ir
 
     private var hasSuspendableChildren = false
 
-    protected fun markNode(node: IrElement) {
+    private fun markNode(node: IrElement) {
         suspendableNodes += node
         hasSuspendableChildren = true
     }
 
-    protected fun isSuspendableNode(node: IrElement) = node in suspendableNodes
+    private fun isSuspendableNode(node: IrElement) = node in suspendableNodes
 
     override fun visitElement(element: IrElement) {
         val current = hasSuspendableChildren
@@ -51,9 +50,6 @@ open class SuspendableNodesCollector(private val suspendableNodes: MutableSet<Ir
             markNode(expression)
         }
     }
-}
-
-class SuspendedTerminatorsCollector(suspendableNodes: MutableSet<IrElement>) : SuspendableNodesCollector(suspendableNodes) {
 
     override fun visitBreakContinue(jump: IrBreakContinue) {
         if (isSuspendableNode(jump.loop)) {
@@ -71,12 +67,13 @@ class SuspendedTerminatorsCollector(suspendableNodes: MutableSet<IrElement>) : S
 }
 
 fun collectSuspendableNodes(function: IrBlock): MutableSet<IrElement> {
-
     val suspendableNodes = mutableSetOf<IrElement>()
-    // 1st: mark suspendable loops and tries
-    function.acceptVoid(SuspendableNodesCollector(suspendableNodes))
-    // 2nd: mark inner terminators
-    function.acceptVoid(SuspendedTerminatorsCollector(suspendableNodes))
+    var size: Int
+
+    do {
+        size = suspendableNodes.size
+        function.acceptVoid(SuspendableNodesCollector(suspendableNodes))
+    } while (size != suspendableNodes.size)
 
     return suspendableNodes
 }
@@ -92,7 +89,7 @@ class LiveLocalsTransformer(
         return expression.run { IrGetFieldImpl(startOffset, endOffset, field, type, receiver(), origin) }
     }
 
-    override fun visitSetVariable(expression: IrSetVariable): IrExpression {
+    override fun visitSetValue(expression: IrSetValue): IrExpression {
         expression.transformChildrenVoid(this)
         val field = localMap[expression.symbol] ?: return expression
         return expression.run { IrSetFieldImpl(startOffset, endOffset, field, receiver(), value, unitType, origin) }

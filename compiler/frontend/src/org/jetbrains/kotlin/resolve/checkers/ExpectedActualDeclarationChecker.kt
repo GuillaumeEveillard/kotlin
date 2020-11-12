@@ -54,6 +54,8 @@ class ExpectedActualDeclarationChecker(
 
     override fun check(declaration: KtDeclaration, descriptor: DeclarationDescriptor, context: DeclarationCheckerContext) {
         if (!context.languageVersionSettings.supportsFeature(LanguageFeature.MultiPlatformProjects)) return
+        // TODO: we need a klib based MPP aware ModuleStructureOracle. Just disable the checks for now.
+        if (context.languageVersionSettings.getFlag(AnalysisFlags.expectActualLinker)) return
 
         // Note that this check is necessary, because for default accessors KtProperty is passed for KtDeclaration, so this
         // case won't be covered by the next check (also, it accidentally fixes KT-28385)
@@ -138,7 +140,12 @@ class ExpectedActualDeclarationChecker(
             }
 
         // Several compatible actuals on one path: report AMBIGUIOUS_ACTUALS here
-        val atLeastWeaklyCompatibleActuals = compatibility.filterKeys { it.isCompatibleOrWeakCompatible() }.values.flatten()
+        val atLeastWeaklyCompatibleActuals = compatibility
+            .filterKeys { it.isCompatibleOrWeakCompatible() }
+            .values
+            .flatten()
+            .distinct()
+
         if (atLeastWeaklyCompatibleActuals.size > 1) {
             trace.report(Errors.AMBIGUOUS_ACTUALS.on(
                 reportOn,

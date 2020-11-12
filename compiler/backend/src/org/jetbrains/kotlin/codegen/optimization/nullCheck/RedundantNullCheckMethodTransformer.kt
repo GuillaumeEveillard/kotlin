@@ -19,6 +19,7 @@ package org.jetbrains.kotlin.codegen.optimization.nullCheck
 import org.jetbrains.kotlin.codegen.coroutines.withInstructionAdapter
 import org.jetbrains.kotlin.codegen.inline.ReifiedTypeInliner
 import org.jetbrains.kotlin.codegen.intrinsics.IntrinsicMethods
+import org.jetbrains.kotlin.codegen.linkWithLabel
 import org.jetbrains.kotlin.codegen.optimization.common.StrictBasicValue
 import org.jetbrains.kotlin.codegen.optimization.common.debugText
 import org.jetbrains.kotlin.codegen.optimization.common.isInsn
@@ -142,9 +143,9 @@ class RedundantNullCheckMethodTransformer(private val generationState: Generatio
 
         private fun transformTrivialCheckNotNull(insn: AbstractInsnNode, nullability: Nullability) {
             if (nullability != Nullability.NOT_NULL) return
-            val dupInsn = insn.previous?.takeIf { it.opcode == Opcodes.DUP } ?: return
+            val previousInsn = insn.previous?.takeIf { it.opcode == Opcodes.DUP || it.opcode == Opcodes.ALOAD } ?: return
             methodNode.instructions.run {
-                remove(dupInsn)
+                remove(previousInsn)
                 remove(insn)
             }
         }
@@ -184,9 +185,10 @@ class RedundantNullCheckMethodTransformer(private val generationState: Generatio
                         }
 
                         insn.isCheckNotNull() -> {
-                            val dupInsn = insn.previous ?: continue@insnLoop
-                            if (dupInsn.opcode != Opcodes.DUP) continue@insnLoop
-                            val aLoadInsn = dupInsn.previous ?: continue@insnLoop
+                            val previous = insn.previous ?: continue@insnLoop
+                            val aLoadInsn = if (previous.opcode == Opcodes.DUP) {
+                                previous.previous ?: continue@insnLoop
+                            } else previous
                             if (aLoadInsn.opcode != Opcodes.ALOAD) continue@insnLoop
                             addDependentCheck(insn, aLoadInsn as VarInsnNode)
                         }
@@ -268,7 +270,7 @@ class RedundantNullCheckMethodTransformer(private val generationState: Generatio
                 //  <...>   -- v is null here
 
                 val jumpsIfNull = insn.opcode == Opcodes.IFNULL
-                val originalLabel = insn.label
+                val originalLabel = insn.label.linkWithLabel()
                 originalLabels[insn] = originalLabel
                 insn.label = synthetic(LabelNode(Label()))
 
@@ -300,6 +302,10 @@ class RedundantNullCheckMethodTransformer(private val generationState: Generatio
             private fun NullabilityAssumptions.injectAssumptionsForNotNullAssertion(varIndex: Int, insn: AbstractInsnNode) {
                 //  ALOAD v
                 //  DUP
+                //  INVOKESTATIC checkNotNull
+                //  <...>   -- v is not null here (otherwise an exception was thrown)
+
+                //  ALOAD v
                 //  INVOKESTATIC checkNotNull
                 //  <...>   -- v is not null here (otherwise an exception was thrown)
 
@@ -337,7 +343,7 @@ class RedundantNullCheckMethodTransformer(private val generationState: Generatio
                 val originalLabel: LabelNode?
                 val insertAfterNotNull: AbstractInsnNode
                 if (jumpsIfInstance) {
-                    originalLabel = next.label
+                    originalLabel = next.label.linkWithLabel()
                     originalLabels[next] = next.label
                     val newLabel = synthetic(LabelNode(Label()))
                     methodNode.instructions.add(newLabel)

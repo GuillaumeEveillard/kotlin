@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.idea.refactoring.getSmartSelectSuggestions
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.test.KotlinTestUtils
 
+@Suppress("DEPRECATION")
 abstract class AbstractSmartSelectionTest : LightCodeInsightTestCase() {
     fun doTestSmartSelection(path: String) {
         configureByFile(path)

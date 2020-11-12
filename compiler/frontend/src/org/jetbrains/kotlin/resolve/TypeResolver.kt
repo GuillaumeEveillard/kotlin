@@ -17,7 +17,7 @@
 package org.jetbrains.kotlin.resolve
 
 import com.intellij.util.SmartList
-import org.jetbrains.kotlin.builtins.PlatformToKotlinClassMap
+import org.jetbrains.kotlin.builtins.PlatformToKotlinClassMapper
 import org.jetbrains.kotlin.builtins.createFunctionType
 import org.jetbrains.kotlin.config.LanguageFeature
 import org.jetbrains.kotlin.config.LanguageVersionSettings
@@ -43,6 +43,7 @@ import org.jetbrains.kotlin.resolve.PossiblyBareType.type
 import org.jetbrains.kotlin.resolve.bindingContextUtil.recordScope
 import org.jetbrains.kotlin.resolve.calls.checkers.checkCoroutinesFeature
 import org.jetbrains.kotlin.resolve.calls.tasks.DynamicCallableDescriptors
+import org.jetbrains.kotlin.resolve.checkers.TrailingCommaChecker
 import org.jetbrains.kotlin.resolve.descriptorUtil.findImplicitOuterClassArguments
 import org.jetbrains.kotlin.resolve.scopes.LazyScopeAdapter
 import org.jetbrains.kotlin.resolve.scopes.LexicalScope
@@ -52,7 +53,6 @@ import org.jetbrains.kotlin.resolve.scopes.utils.findFirstFromMeAndParent
 import org.jetbrains.kotlin.resolve.source.KotlinSourceElement
 import org.jetbrains.kotlin.resolve.source.getPsi
 import org.jetbrains.kotlin.resolve.source.toSourceElement
-import org.jetbrains.kotlin.storage.LockBasedStorageManager
 import org.jetbrains.kotlin.types.*
 import org.jetbrains.kotlin.types.Variance.*
 import org.jetbrains.kotlin.types.typeUtil.containsTypeAliasParameters
@@ -69,7 +69,7 @@ class TypeResolver(
     private val dynamicTypesSettings: DynamicTypesSettings,
     private val dynamicCallableDescriptors: DynamicCallableDescriptors,
     private val identifierChecker: IdentifierChecker,
-    private val platformToKotlinClassMap: PlatformToKotlinClassMap,
+    private val platformToKotlinClassMapper: PlatformToKotlinClassMapper,
     private val languageVersionSettings: LanguageVersionSettings
 ) {
     private val isNonParenthesizedAnnotationsOnFunctionalTypesEnabled =
@@ -289,6 +289,11 @@ class TypeResolver(
                 val returnType = if (returnTypeRef != null) resolveType(c.noBareTypes(), returnTypeRef)
                 else moduleDescriptor.builtIns.unitType
 
+                val parameterList = type.parameterList
+                if (parameterList?.stub == null) {
+                    TrailingCommaChecker.check(parameterList?.trailingComma, c.trace, languageVersionSettings)
+                }
+
                 result = type(
                     createFunctionType(
                         moduleDescriptor.builtIns, annotations, receiverType,
@@ -319,7 +324,7 @@ class TypeResolver(
                     type: KotlinType,
                     source: SourceElement
                 ) : VariableDescriptorImpl(containingDeclaration, annotations, name, type, source) {
-                    override fun getVisibility() = Visibilities.LOCAL
+                    override fun getVisibility() = DescriptorVisibilities.LOCAL
 
                     override fun substitute(substitutor: TypeSubstitutor): VariableDescriptor? {
                         throw UnsupportedOperationException("Should not be called for descriptor of type ${this::class.java}")
@@ -434,9 +439,9 @@ class TypeResolver(
     private fun getScopeForTypeParameter(c: TypeResolutionContext, typeParameterDescriptor: TypeParameterDescriptor): MemberScope {
         return when {
             c.checkBounds -> TypeIntersector.getUpperBoundsAsType(typeParameterDescriptor).memberScope
-            else -> LazyScopeAdapter(LockBasedStorageManager.NO_LOCKS.createLazyValue {
+            else -> LazyScopeAdapter {
                 TypeIntersector.getUpperBoundsAsType(typeParameterDescriptor).memberScope
-            })
+            }
         }
     }
 
@@ -448,6 +453,10 @@ class TypeResolver(
         annotations: Annotations
     ): PossiblyBareType {
         val qualifierParts = qualifierResolutionResult.qualifierParts
+
+        if (element is KtUserType && element.stub == null) {
+            TrailingCommaChecker.check(element.typeArgumentList?.trailingComma, c.trace, languageVersionSettings)
+        }
 
         return when (descriptor) {
             is TypeParameterDescriptor -> {
@@ -922,7 +931,7 @@ class TypeResolver(
         return qualifiedExpressionResolver.resolveDescriptorForType(userType, scope, trace, isDebuggerContext).apply {
             if (classifierDescriptor != null) {
                 PlatformClassesMappedToKotlinChecker.reportPlatformClassMappedToKotlin(
-                    platformToKotlinClassMap, trace, userType, classifierDescriptor
+                    platformToKotlinClassMapper, trace, userType, classifierDescriptor
                 )
             }
         }

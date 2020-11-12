@@ -30,7 +30,7 @@ abstract class AbstractPostfixTemplateProviderTest : KotlinLightCodeInsightFixtu
         myFixture.configureByFile(fileName)
         val template = InTextDirectivesUtils.findStringWithPrefixes(fileText, "// TEMPLATE:")
         if (template != null) {
-            TemplateManagerImpl.setTemplateTesting(project, testRootDisposable)
+            TemplateManagerImpl.setTemplateTesting(testRootDisposable)
             myFixture.type(template.replace("\\t", "\t"))
         } else {
             myFixture.type('\t')

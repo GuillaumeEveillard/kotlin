@@ -22,19 +22,24 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.ui.popup.JBPopupAdapter
 import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.ui.popup.LightweightWindowEvent
+import com.intellij.psi.PsiComment
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiWhiteSpace
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.ui.components.JBList
 import org.jetbrains.kotlin.builtins.KotlinBuiltIns
+import org.jetbrains.kotlin.idea.KotlinBundle
 import org.jetbrains.kotlin.idea.caches.resolve.analyze
 import org.jetbrains.kotlin.idea.core.util.CodeInsightUtils
 import org.jetbrains.kotlin.idea.refactoring.introduce.findExpressionOrStringFragment
+import org.jetbrains.kotlin.kdoc.psi.api.KDoc
+import org.jetbrains.kotlin.lexer.KtTokens
 import org.jetbrains.kotlin.psi.*
 import org.jetbrains.kotlin.psi.psiUtil.getNextSiblingIgnoringWhitespaceAndComments
 import org.jetbrains.kotlin.psi.psiUtil.getParentOfTypeAndBranch
 import org.jetbrains.kotlin.psi.psiUtil.getPrevSiblingIgnoringWhitespaceAndComments
+import org.jetbrains.kotlin.psi.psiUtil.getStrictParentOfType
 import org.jetbrains.kotlin.resolve.lazy.BodyResolveMode
 import java.awt.Component
 import java.util.*
@@ -103,7 +108,11 @@ fun getSmartSelectSuggestions(
 
     var element: PsiElement? = file.findElementAt(offset) ?: return emptyList()
 
-    if (element is PsiWhiteSpace) return getSmartSelectSuggestions(file, offset - 1, elementKind)
+    if (element is PsiWhiteSpace
+        || element?.node?.elementType == KtTokens.RPAR
+        || element is PsiComment
+        || element?.getStrictParentOfType<KDoc>() != null
+    ) return getSmartSelectSuggestions(file, offset - 1, elementKind)
 
     val elements = ArrayList<KtElement>()
     while (element != null && !(element is KtBlockExpression && element.parent !is KtFunctionLiteral) &&
@@ -178,7 +187,8 @@ private fun smartSelectElement(
 ) {
     val elements = elementKinds.flatMap { getSmartSelectSuggestions(file, offset, it) }
     if (elements.isEmpty()) {
-        if (failOnEmptySuggestion) throw IntroduceRefactoringException(KotlinRefactoringBundle.message("cannot.refactor.not.expression"))
+        if (failOnEmptySuggestion) throw IntroduceRefactoringException(
+            KotlinBundle.message("cannot.refactor.not.expression"))
         callback(null)
         return
     }
@@ -271,7 +281,7 @@ private fun findElement(
         //todo: if it's infix expression => add (), then commit document then return new created expression
 
         if (failOnNoExpression) {
-            throw IntroduceRefactoringException(KotlinRefactoringBundle.message("cannot.refactor.not.expression"))
+            throw IntroduceRefactoringException(KotlinBundle.message("cannot.refactor.not.expression"))
         }
         return null
     }

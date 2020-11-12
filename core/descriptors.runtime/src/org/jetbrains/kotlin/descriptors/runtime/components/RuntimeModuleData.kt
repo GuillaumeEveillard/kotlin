@@ -29,20 +29,21 @@ import org.jetbrains.kotlin.load.java.AnnotationTypeQualifierResolver
 import org.jetbrains.kotlin.load.java.JavaClassesTracker
 import org.jetbrains.kotlin.load.java.components.JavaPropertyInitializerEvaluator
 import org.jetbrains.kotlin.load.java.components.JavaResolverCache
-import org.jetbrains.kotlin.load.java.components.SamConversionResolver
 import org.jetbrains.kotlin.load.java.components.SignaturePropagator
 import org.jetbrains.kotlin.load.java.lazy.*
+import org.jetbrains.kotlin.load.java.typeEnhancement.JavaTypeEnhancement
 import org.jetbrains.kotlin.load.java.typeEnhancement.SignatureEnhancement
 import org.jetbrains.kotlin.load.kotlin.*
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.resolve.jvm.JavaDescriptorResolver
+import org.jetbrains.kotlin.resolve.sam.SamConversionResolverImpl
 import org.jetbrains.kotlin.serialization.deserialization.ContractDeserializer
 import org.jetbrains.kotlin.serialization.deserialization.DeserializationComponents
 import org.jetbrains.kotlin.serialization.deserialization.DeserializationConfiguration
 import org.jetbrains.kotlin.storage.LockBasedStorageManager
 import org.jetbrains.kotlin.storage.StorageManager
 import org.jetbrains.kotlin.types.checker.NewKotlinTypeChecker
-import org.jetbrains.kotlin.utils.Jsr305State
+import org.jetbrains.kotlin.utils.JavaTypeEnhancementState
 
 class RuntimeModuleData private constructor(
     val deserialization: DeserializationComponents,
@@ -85,7 +86,7 @@ class RuntimeModuleData private constructor(
             val stdlibClassLoader = Unit::class.java.classLoader
             val builtinsProvider = JvmBuiltInsPackageFragmentProvider(
                 storageManager, ReflectKotlinClassFinder(stdlibClassLoader), module, notFoundClasses, builtIns.settings, builtIns.settings,
-                DeserializationConfiguration.Default, NewKotlinTypeChecker.Default
+                DeserializationConfiguration.Default, NewKotlinTypeChecker.Default, SamConversionResolverImpl(storageManager, emptyList())
             )
 
             module.setDependencies(module)
@@ -106,17 +107,19 @@ fun makeLazyJavaPackageFragmentFromClassLoaderProvider(
     notFoundClasses: NotFoundClasses,
     reflectKotlinClassFinder: KotlinClassFinder,
     deserializedDescriptorResolver: DeserializedDescriptorResolver,
-    singleModuleClassResolver: ModuleClassResolver
+    singleModuleClassResolver: ModuleClassResolver,
+    packagePartProvider: PackagePartProvider = PackagePartProvider.Empty
 ): LazyJavaPackageFragmentProvider {
-    val annotationTypeQualifierResolver = AnnotationTypeQualifierResolver(storageManager, Jsr305State.DISABLED)
+    val annotationTypeQualifierResolver = AnnotationTypeQualifierResolver(storageManager, JavaTypeEnhancementState.DISABLED_JSR_305)
+    val javaTypeEnhancementState = JavaTypeEnhancementState.DISABLED_JSR_305
     val javaResolverComponents = JavaResolverComponents(
         storageManager, ReflectJavaClassFinder(classLoader), reflectKotlinClassFinder, deserializedDescriptorResolver,
         SignaturePropagator.DO_NOTHING, RuntimeErrorReporter, JavaResolverCache.EMPTY,
-        JavaPropertyInitializerEvaluator.DoNothing, SamConversionResolver.Empty, RuntimeSourceElementFactory,
-        singleModuleClassResolver, PackagePartProvider.Empty, SupertypeLoopChecker.EMPTY, LookupTracker.DO_NOTHING, module,
+        JavaPropertyInitializerEvaluator.DoNothing, SamConversionResolverImpl(storageManager, emptyList()), RuntimeSourceElementFactory,
+        singleModuleClassResolver, packagePartProvider, SupertypeLoopChecker.EMPTY, LookupTracker.DO_NOTHING, module,
         ReflectionTypes(module, notFoundClasses), annotationTypeQualifierResolver,
-        SignatureEnhancement(annotationTypeQualifierResolver, Jsr305State.DISABLED),
-        JavaClassesTracker.Default, JavaResolverSettings.Default, NewKotlinTypeChecker.Default
+        SignatureEnhancement(annotationTypeQualifierResolver, JavaTypeEnhancementState.DISABLED_JSR_305, JavaTypeEnhancement(JavaResolverSettings.Default)),
+        JavaClassesTracker.Default, JavaResolverSettings.Default, NewKotlinTypeChecker.Default, javaTypeEnhancementState
     )
 
     return LazyJavaPackageFragmentProvider(javaResolverComponents)

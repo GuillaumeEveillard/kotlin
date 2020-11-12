@@ -20,23 +20,18 @@ import com.intellij.util.ArrayUtil
 import org.jetbrains.kotlin.builtins.jvm.JavaToKotlinClassMap
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.Modality
-import org.jetbrains.kotlin.descriptors.Visibilities
 import org.jetbrains.kotlin.fir.FirSession
-import org.jetbrains.kotlin.fir.declarations.FirClassLikeDeclaration
-import org.jetbrains.kotlin.fir.declarations.FirRegularClass
-import org.jetbrains.kotlin.fir.declarations.classId
-import org.jetbrains.kotlin.fir.declarations.superConeTypes
-import org.jetbrains.kotlin.fir.resolve.FirProvider
-import org.jetbrains.kotlin.fir.resolve.directExpansionType
+import org.jetbrains.kotlin.descriptors.Visibilities
+import org.jetbrains.kotlin.fir.declarations.*
+import org.jetbrains.kotlin.fir.resolve.firProvider
+import org.jetbrains.kotlin.fir.resolve.fullyExpandedType
 import org.jetbrains.kotlin.fir.resolve.toSymbol
-import org.jetbrains.kotlin.fir.resolve.transformers.FirSupertypeResolverTransformer
-import org.jetbrains.kotlin.fir.service
+import org.jetbrains.kotlin.fir.resolve.transformers.resolveSupertypesInTheAir
 import org.jetbrains.kotlin.fir.symbols.StandardClassIds
 import org.jetbrains.kotlin.fir.symbols.impl.FirClassSymbol
 import org.jetbrains.kotlin.fir.types.*
 import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
-import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.resolve.jvm.JvmPrimitiveType
 import org.jetbrains.kotlin.resolve.jvm.KotlinFinderMarker
 
@@ -45,22 +40,21 @@ class FirJavaElementFinder(
     project: Project
 ) : PsiElementFinder(), KotlinFinderMarker {
     private val psiManager = PsiManager.getInstance(project)
-    private val firProvider = session.service<FirProvider>()
+    private val firProvider = session.firProvider
 
     override fun findPackage(qualifiedName: String): PsiPackage? {
-        if (firProvider.getClassNamesInPackage(FqName(qualifiedName)).isEmpty()) return null
+        if (firProvider.symbolProvider.getPackage(FqName(qualifiedName)) == null) return null
         return PsiPackageImpl(psiManager, qualifiedName)
     }
 
     override fun getClasses(psiPackage: PsiPackage, scope: GlobalSearchScope): Array<PsiClass> {
-        return firProvider
-            .getClassNamesInPackage(FqName(psiPackage.qualifiedName))
+        return firProvider.getClassNamesInPackage(FqName(psiPackage.qualifiedName))
             .mapNotNull { findClass(psiPackage.qualifiedName + "." + it.identifier, scope) }
             .toTypedArray()
     }
 
     override fun findClasses(qualifiedName: String, scope: GlobalSearchScope): Array<PsiClass> {
-        return findClass(qualifiedName, scope)?.let(::arrayOf) ?: emptyArray()
+        return findClass(qualifiedName, scope)?.let { arrayOf(it) } ?: emptyArray()
     }
 
     override fun findClass(qualifiedName: String, scope: GlobalSearchScope): PsiClass? {
@@ -71,8 +65,7 @@ class FirJavaElementFinder(
             firProvider.getFirClassifierByFqName(classId) as? FirRegularClass
                 ?: return null
 
-        val ktFile = firClass.psi?.containingFile as KtFile
-        val fileStub = createJavaFileStub(classId.packageFqName, listOf(ktFile))
+        val fileStub = createJavaFileStub(classId.packageFqName, psiManager)
 
         return buildStub(firClass, fileStub).psi
     }
@@ -94,18 +87,15 @@ class FirJavaElementFinder(
 
         newTypeParameterList(
             stub,
-            firClass.typeParameters.map { Pair(it.name.asString(), arrayOf(CommonClassNames.JAVA_LANG_OBJECT)) }
+            firClass.typeParameters.filterIsInstance<FirTypeParameter>().map { Pair(it.name.asString(), arrayOf(CommonClassNames.JAVA_LANG_OBJECT)) }
         )
 
-        if (firClass.supertypesComputationStatus != FirClassLikeDeclaration.SupertypesComputationStatus.COMPUTED) {
-            val firForSuperClassFile = firProvider.getFirClassifierContainerFile(classId)
-            FirSupertypeResolverTransformer().apply {
-                initFromFile(firForSuperClassFile)
-                transformRegularClass(firClass, null)
-            }
+        val superTypeRefs = when {
+            firClass.resolvePhase > FirResolvePhase.SUPER_TYPES -> firClass.superTypeRefs
+            else -> firClass.resolveSupertypesInTheAir(session)
         }
 
-        stub.addSupertypesReferencesLists(firClass, session)
+        stub.addSupertypesReferencesLists(firClass, superTypeRefs, session)
 
         for (nestedClass in firClass.declarations.filterIsInstance<FirRegularClass>()) {
             buildStub(nestedClass, stub)
@@ -118,9 +108,9 @@ class FirJavaElementFinder(
 
 private fun FirRegularClass.packFlags(): Int {
     var flags = when (visibility) {
-        Visibilities.PRIVATE -> ModifierFlags.PRIVATE_MASK
-        Visibilities.PROTECTED -> ModifierFlags.PROTECTED_MASK
-        Visibilities.PUBLIC -> ModifierFlags.PUBLIC_MASK
+        Visibilities.Private -> ModifierFlags.PRIVATE_MASK
+        Visibilities.Protected -> ModifierFlags.PROTECTED_MASK
+        Visibilities.Public -> ModifierFlags.PUBLIC_MASK
         else -> ModifierFlags.PACKAGE_LOCAL_MASK
     }
 
@@ -137,9 +127,12 @@ private fun FirRegularClass.packFlags(): Int {
     return flags
 }
 
-private fun PsiClassStubImpl<*>.addSupertypesReferencesLists(firRegularClass: FirRegularClass, session: FirSession) {
-    if (firRegularClass.supertypesComputationStatus == FirClassLikeDeclaration.SupertypesComputationStatus.COMPUTING) return
-    require(firRegularClass.superTypeRefs.all { it is FirResolvedTypeRef }) {
+private fun PsiClassStubImpl<*>.addSupertypesReferencesLists(
+    firRegularClass: FirRegularClass,
+    superTypeRefs: List<FirTypeRef>,
+    session: FirSession
+) {
+    require(superTypeRefs.all { it is FirResolvedTypeRef }) {
         "Supertypes for light class $qualifiedName are being added too early"
     }
 
@@ -148,7 +141,8 @@ private fun PsiClassStubImpl<*>.addSupertypesReferencesLists(firRegularClass: Fi
     val interfaceNames = mutableListOf<String>()
     var superName: String? = null
 
-    for (superConeType in firRegularClass.superConeTypes) {
+    for (superTypeRef in superTypeRefs) {
+        val superConeType = superTypeRef.coneTypeSafe<ConeClassLikeType>() ?: continue
         val supertypeFirClass = superConeType.toFirClass(session) ?: continue
 
         val canonicalString = superConeType.mapToCanonicalString(session)
@@ -189,20 +183,16 @@ private fun newTypeParameterList(parent: StubElement<*>, parameters: List<Pair<S
     }
 }
 
-private fun createJavaFileStub(packageFqName: FqName, files: Collection<KtFile>): PsiJavaFileStub {
+private fun createJavaFileStub(packageFqName: FqName, psiManager: PsiManager): PsiJavaFileStub {
     val javaFileStub = PsiJavaFileStubImpl(packageFqName.asString(), /*compiled = */true)
     javaFileStub.psiFactory = ClsStubPsiFactory.INSTANCE
 
-    val fakeFile = object : ClsFileImpl(files.first().viewProvider) {
+    val fakeFile = object : ClsFileImpl(DummyHolderViewProvider(psiManager)) {
         override fun getStub() = javaFileStub
 
         override fun getPackageName() = packageFqName.asString()
 
         override fun isPhysical() = false
-
-        override fun getText(): String {
-            return files.singleOrNull()?.text ?: super.getText()
-        }
     }
 
     javaFileStub.psi = fakeFile
@@ -210,10 +200,8 @@ private fun createJavaFileStub(packageFqName: FqName, files: Collection<KtFile>)
 }
 
 private fun ConeClassLikeType.toFirClass(session: FirSession): FirRegularClass? {
-    return when (this) {
-        is ConeAbbreviatedType -> this.directExpansionType(session)?.toFirClass(session)
-        else -> (this.lookupTag.toSymbol(session) as? FirClassSymbol)?.fir
-    }
+    val expandedType = this.fullyExpandedType(session)
+    return (expandedType.lookupTag.toSymbol(session) as? FirClassSymbol)?.fir as? FirRegularClass
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -225,7 +213,8 @@ private const val ERROR_TYPE_STUB = CommonClassNames.JAVA_LANG_OBJECT
 private fun ConeKotlinType.mapToCanonicalString(session: FirSession): String {
     return when (this) {
         is ConeClassLikeType -> mapToCanonicalString(session)
-        is ConeTypeVariableType, is ConeFlexibleType, is ConeCapturedType, is ConeDefinitelyNotNullType, is ConeIntersectionType ->
+        is ConeTypeVariableType, is ConeFlexibleType, is ConeCapturedType,
+        is ConeDefinitelyNotNullType, is ConeIntersectionType, is ConeStubType, is ConeIntegerLiteralType ->
             error("Unexpected type: $this [${this::class}]")
         is ConeLookupTagBasedType -> lookupTag.name.asString()
     }
@@ -233,17 +222,16 @@ private fun ConeKotlinType.mapToCanonicalString(session: FirSession): String {
 
 private fun ConeClassLikeType.mapToCanonicalString(session: FirSession): String {
     return when (this) {
-        is ConeAbbreviatedType -> this.directExpansionType(session)?.mapToCanonicalString(session) ?: ERROR_TYPE_STUB
-        is ConeClassType -> mapToCanonicalString(session)
         is ConeClassErrorType -> ERROR_TYPE_STUB
+        else -> fullyExpandedType(session).mapToCanonicalNoExpansionString(session)
     }
 }
 
-private fun ConeClassType.mapToCanonicalString(session: FirSession): String {
+private fun ConeClassLikeType.mapToCanonicalNoExpansionString(session: FirSession): String {
     if (lookupTag.classId == StandardClassIds.Array) {
         return when (val typeProjection = typeArguments[0]) {
             is ConeStarProjection -> CommonClassNames.JAVA_LANG_OBJECT
-            is ConeTypedProjection -> {
+            is ConeKotlinTypeProjection -> {
                 if (typeProjection.kind == ProjectionKind.IN)
                     CommonClassNames.JAVA_LANG_VOID
                 else
@@ -253,7 +241,7 @@ private fun ConeClassType.mapToCanonicalString(session: FirSession): String {
         } + "[]"
     }
 
-    val context = ConeTypeCheckerContext(false, session)
+    val context = ConeTypeCheckerContext(isErrorTypeEqualsToAnything = false, isStubTypeEqualsToAnything = true, session = session)
 
     with(context) {
         val typeConstructor = typeConstructor()
@@ -270,10 +258,10 @@ private fun ConeClassType.mapToCanonicalString(session: FirSession): String {
 
 }
 
-private fun ConeKotlinTypeProjection.mapToCanonicalString(session: FirSession): String {
+private fun ConeTypeProjection.mapToCanonicalString(session: FirSession): String {
     return when (this) {
         is ConeStarProjection -> "?"
-        is ConeTypedProjection -> {
+        is ConeKotlinTypeProjection -> {
             val wildcard = when (kind) {
                 ProjectionKind.STAR -> error("Should be handled in the case above")
                 ProjectionKind.IN -> "? super "

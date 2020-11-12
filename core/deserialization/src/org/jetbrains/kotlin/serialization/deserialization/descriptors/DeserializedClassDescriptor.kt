@@ -26,9 +26,11 @@ import org.jetbrains.kotlin.resolve.scopes.StaticScopeForKotlinEnum
 import org.jetbrains.kotlin.serialization.deserialization.*
 import org.jetbrains.kotlin.types.AbstractClassTypeConstructor
 import org.jetbrains.kotlin.types.KotlinType
+import org.jetbrains.kotlin.types.SimpleType
 import org.jetbrains.kotlin.types.TypeConstructor
 import org.jetbrains.kotlin.types.checker.KotlinTypeRefiner
 import org.jetbrains.kotlin.types.refinement.TypeRefinement
+import org.jetbrains.kotlin.utils.addToStdlib.flatMapToNullable
 import java.util.*
 
 class DeserializedClassDescriptor(
@@ -40,11 +42,11 @@ class DeserializedClassDescriptor(
 ) : AbstractClassDescriptor(
     outerContext.storageManager,
     nameResolver.getClassId(classProto.fqName).shortClassName
-) {
+), DeserializedDescriptor {
     private val classId = nameResolver.getClassId(classProto.fqName)
 
     private val modality = ProtoEnumFlags.modality(Flags.MODALITY.get(classProto.flags))
-    private val visibility = ProtoEnumFlags.visibility(Flags.VISIBILITY.get(classProto.flags))
+    private val visibility = ProtoEnumFlags.descriptorVisibility(Flags.VISIBILITY.get(classProto.flags))
     private val kind = ProtoEnumFlags.classKind(Flags.CLASS_KIND.get(classProto.flags))
 
     val c = outerContext.childContext(
@@ -103,6 +105,8 @@ class DeserializedClassDescriptor(
     override fun isActual() = false
 
     override fun isExternal() = Flags.IS_EXTERNAL_CLASS.get(classProto.flags)
+
+    override fun isFun() = Flags.IS_FUN_INTERFACE.get(classProto.flags)
 
     override fun getUnsubstitutedMemberScope(kotlinTypeRefiner: KotlinTypeRefiner): MemberScope =
         memberScopeHolder.getScope(kotlinTypeRefiner)
@@ -164,11 +168,18 @@ class DeserializedClassDescriptor(
 
     override fun getSealedSubclasses() = sealedSubclasses()
 
-    override fun toString() = "deserialized class $name" // not using descriptor render to preserve laziness
+    override fun toString() =
+        "deserialized ${if (isExpect) "expect " else ""}class $name" // not using descriptor renderer to preserve laziness
 
     override fun getSource() = sourceElement
 
     override fun getDeclaredTypeParameters() = c.typeDeserializer.ownTypeParameters
+
+    override fun getDefaultFunctionTypeForSamInterface(): SimpleType? {
+        return c.components.samConversionResolver.resolveFunctionTypeIfSamInterface(this)
+    }
+
+    override fun isDefinitelyNotSamInterface() = !isFun
 
     private inner class DeserializedClassTypeConstructor : AbstractClassTypeConstructor(c.storageManager) {
         private val parameters = c.storageManager.createLazyValue {
@@ -218,7 +229,7 @@ class DeserializedClassDescriptor(
         }
 
         private val refinedSupertypes = c.storageManager.createLazyValue {
-            @UseExperimental(TypeRefinement::class)
+            @OptIn(TypeRefinement::class)
             kotlinTypeRefiner.refineSupertypes(classDescriptor)
         }
 
@@ -236,21 +247,21 @@ class DeserializedClassDescriptor(
             return super.getContributedVariables(name, location)
         }
 
-        override fun computeNonDeclaredFunctions(name: Name, functions: MutableCollection<SimpleFunctionDescriptor>) {
+        override fun isDeclaredFunctionAvailable(function: SimpleFunctionDescriptor): Boolean {
+            return c.components.platformDependentDeclarationFilter.isFunctionAvailable(this@DeserializedClassDescriptor, function)
+        }
+
+        override fun computeNonDeclaredFunctions(name: Name, functions: MutableList<SimpleFunctionDescriptor>) {
             val fromSupertypes = ArrayList<SimpleFunctionDescriptor>()
             for (supertype in refinedSupertypes()) {
                 fromSupertypes.addAll(supertype.memberScope.getContributedFunctions(name, NoLookupLocation.FOR_ALREADY_TRACKED))
-            }
-
-            functions.retainAll {
-                c.components.platformDependentDeclarationFilter.isFunctionAvailable(this@DeserializedClassDescriptor, it)
             }
 
             functions.addAll(c.components.additionalClassPartsProvider.getFunctions(name, this@DeserializedClassDescriptor))
             generateFakeOverrides(name, fromSupertypes, functions)
         }
 
-        override fun computeNonDeclaredProperties(name: Name, descriptors: MutableCollection<PropertyDescriptor>) {
+        override fun computeNonDeclaredProperties(name: Name, descriptors: MutableList<PropertyDescriptor>) {
             val fromSupertypes = ArrayList<PropertyDescriptor>()
             for (supertype in refinedSupertypes()) {
                 fromSupertypes.addAll(supertype.memberScope.getContributedVariables(name, NoLookupLocation.FOR_ALREADY_TRACKED))
@@ -261,7 +272,7 @@ class DeserializedClassDescriptor(
         private fun <D : CallableMemberDescriptor> generateFakeOverrides(
             name: Name,
             fromSupertypes: Collection<D>,
-            result: MutableCollection<D>
+            result: MutableList<D>
         ) {
             val fromCurrent = ArrayList<CallableMemberDescriptor>(result)
             c.components.kotlinTypeChecker.overridingUtil.generateOverridesInFunctionGroup(
@@ -295,6 +306,12 @@ class DeserializedClassDescriptor(
         override fun getNonDeclaredVariableNames(): Set<Name> {
             return classDescriptor.typeConstructor.supertypes.flatMapTo(LinkedHashSet()) {
                 it.memberScope.getVariableNames()
+            }
+        }
+
+        override fun getNonDeclaredClassifierNames(): Set<Name>? {
+            return classDescriptor.typeConstructor.supertypes.flatMapToNullable(LinkedHashSet()) {
+                it.memberScope.getClassifierNames()
             }
         }
 

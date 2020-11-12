@@ -1,7 +1,6 @@
 package test
 
 abstract class Base(protected var field: Int)
-
 class Derived(value: Int) : Base(value) {
     private val usage: View = object : View() {
         override fun click() {
@@ -11,5 +10,5 @@ class Derived(value: Int) : Base(value) {
 }
 
 internal abstract class View {
-    internal abstract fun click()
+    abstract fun click()
 }

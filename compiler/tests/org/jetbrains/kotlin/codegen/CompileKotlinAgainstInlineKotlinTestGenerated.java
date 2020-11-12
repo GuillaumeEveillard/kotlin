@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
@@ -22,11 +22,11 @@ import java.util.regex.Pattern;
 @RunWith(JUnit3RunnerWithInners.class)
 public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompileKotlinAgainstInlineKotlinTest {
     private void runTest(String testDataFilePath) throws Exception {
-        KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+        KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
     }
 
     public void testAllFilesPresentInBoxInline() throws Exception {
-        KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+        KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
     }
 
     @TestMetadata("compiler/testData/codegen/boxInline/anonymousObject")
@@ -34,11 +34,16 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class AnonymousObject extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInAnonymousObject() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/anonymousObject"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/anonymousObject"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
+        }
+
+        @TestMetadata("anonymousObjectInDefault.kt")
+        public void testAnonymousObjectInDefault() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/anonymousObject/anonymousObjectInDefault.kt");
         }
 
         @TestMetadata("anonymousObjectOnCallSite.kt")
@@ -81,6 +86,16 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             runTest("compiler/testData/codegen/boxInline/anonymousObject/capturedLambdaInInlineObject.kt");
         }
 
+        @TestMetadata("capturedLocalFun.kt")
+        public void testCapturedLocalFun() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/anonymousObject/capturedLocalFun.kt");
+        }
+
+        @TestMetadata("capturedLocalFunRef.kt")
+        public void testCapturedLocalFunRef() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/anonymousObject/capturedLocalFunRef.kt");
+        }
+
         @TestMetadata("changingReturnType.kt")
         public void testChangingReturnType() throws Exception {
             runTest("compiler/testData/codegen/boxInline/anonymousObject/changingReturnType.kt");
@@ -104,6 +119,16 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @TestMetadata("defineClass.kt")
         public void testDefineClass() throws Exception {
             runTest("compiler/testData/codegen/boxInline/anonymousObject/defineClass.kt");
+        }
+
+        @TestMetadata("functionExpression.kt")
+        public void testFunctionExpression() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/anonymousObject/functionExpression.kt");
+        }
+
+        @TestMetadata("inlineCallInsideInlineLambda.kt")
+        public void testInlineCallInsideInlineLambda() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/anonymousObject/inlineCallInsideInlineLambda.kt");
         }
 
         @TestMetadata("kt13133.kt")
@@ -211,6 +236,16 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             runTest("compiler/testData/codegen/boxInline/anonymousObject/kt19723.kt");
         }
 
+        @TestMetadata("kt34656.kt")
+        public void testKt34656() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/anonymousObject/kt34656.kt");
+        }
+
+        @TestMetadata("kt38197.kt")
+        public void testKt38197() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/anonymousObject/kt38197.kt");
+        }
+
         @TestMetadata("kt6552.kt")
         public void testKt6552() throws Exception {
             runTest("compiler/testData/codegen/boxInline/anonymousObject/kt6552.kt");
@@ -266,16 +301,36 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             runTest("compiler/testData/codegen/boxInline/anonymousObject/sam.kt");
         }
 
+        @TestMetadata("sharedFromCrossinline.kt")
+        public void testSharedFromCrossinline() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/anonymousObject/sharedFromCrossinline.kt");
+        }
+
+        @TestMetadata("superConstructorWithObjectParameter.kt")
+        public void testSuperConstructorWithObjectParameter() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/anonymousObject/superConstructorWithObjectParameter.kt");
+        }
+
+        @TestMetadata("typeInfo.kt")
+        public void testTypeInfo() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/anonymousObject/typeInfo.kt");
+        }
+
+        @TestMetadata("withInlineMethod.kt")
+        public void testWithInlineMethod() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/anonymousObject/withInlineMethod.kt");
+        }
+
         @TestMetadata("compiler/testData/codegen/boxInline/anonymousObject/enumWhen")
         @TestDataPath("$PROJECT_ROOT")
         @RunWith(JUnit3RunnerWithInners.class)
         public static class EnumWhen extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInEnumWhen() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/anonymousObject/enumWhen"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/anonymousObject/enumWhen"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("callSite.kt")
@@ -304,11 +359,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @RunWith(JUnit3RunnerWithInners.class)
         public static class ProperRecapturing extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInProperRecapturing() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/anonymousObject/properRecapturing"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/anonymousObject/properRecapturing"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("inlineChain.kt")
@@ -347,11 +402,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @RunWith(JUnit3RunnerWithInners.class)
         public static class ProperRecapturingInClass extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInProperRecapturingInClass() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/anonymousObject/properRecapturingInClass"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/anonymousObject/properRecapturingInClass"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("inlineChain.kt")
@@ -420,11 +475,16 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @RunWith(JUnit3RunnerWithInners.class)
         public static class Sam extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInSam() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/anonymousObject/sam"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/anonymousObject/sam"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
+            }
+
+            @TestMetadata("anonymousObjectToSam.kt")
+            public void testAnonymousObjectToSam() throws Exception {
+                runTest("compiler/testData/codegen/boxInline/anonymousObject/sam/anonymousObjectToSam.kt");
             }
 
             @TestMetadata("kt17091.kt")
@@ -463,11 +523,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @RunWith(JUnit3RunnerWithInners.class)
         public static class TwoCapturedReceivers extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInTwoCapturedReceivers() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/anonymousObject/twoCapturedReceivers"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/anonymousObject/twoCapturedReceivers"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("kt8668.kt")
@@ -502,11 +562,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class ArgumentOrder extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInArgumentOrder() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/argumentOrder"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/argumentOrder"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("boundFunctionReference.kt")
@@ -532,6 +592,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @TestMetadata("defaultParametersAndLastVararg.kt")
         public void testDefaultParametersAndLastVararg() throws Exception {
             runTest("compiler/testData/codegen/boxInline/argumentOrder/defaultParametersAndLastVararg.kt");
+        }
+
+        @TestMetadata("defaultParametersAndLastVarargWithCorrectOrder.kt")
+        public void testDefaultParametersAndLastVarargWithCorrectOrder() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/argumentOrder/defaultParametersAndLastVarargWithCorrectOrder.kt");
         }
 
         @TestMetadata("extension.kt")
@@ -568,6 +633,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         public void testVarargAndDefaultParameters() throws Exception {
             runTest("compiler/testData/codegen/boxInline/argumentOrder/varargAndDefaultParameters.kt");
         }
+
+        @TestMetadata("varargAndDefaultParametersWithCorrectOrder.kt")
+        public void testVarargAndDefaultParametersWithCorrectOrder() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/argumentOrder/varargAndDefaultParametersWithCorrectOrder.kt");
+        }
     }
 
     @TestMetadata("compiler/testData/codegen/boxInline/arrayConvention")
@@ -575,11 +645,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class ArrayConvention extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInArrayConvention() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/arrayConvention"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/arrayConvention"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("simpleAccess.kt")
@@ -618,11 +688,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class Assert extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInAssert() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/assert"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/assert"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("jvmAssertInlineFunctionAssertionsDisabled.kt")
@@ -638,6 +708,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @TestMetadata("jvmAssertInlineLambda.kt")
         public void testJvmAssertInlineLambda() throws Exception {
             runTest("compiler/testData/codegen/boxInline/assert/jvmAssertInlineLambda.kt");
+        }
+
+        @TestMetadata("jvmClassInitializer.kt")
+        public void testJvmClassInitializer() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/assert/jvmClassInitializer.kt");
         }
 
         @TestMetadata("jvmCompanion.kt")
@@ -660,9 +735,24 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             runTest("compiler/testData/codegen/boxInline/assert/jvmCrossinlineLambdaDeclarationSite.kt");
         }
 
+        @TestMetadata("jvmCrossinlineLambdaDeclarationSiteOnly.kt")
+        public void testJvmCrossinlineLambdaDeclarationSiteOnly() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/assert/jvmCrossinlineLambdaDeclarationSiteOnly.kt");
+        }
+
+        @TestMetadata("jvmCrossinlineSAMDeclarationSite.kt")
+        public void testJvmCrossinlineSAMDeclarationSite() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/assert/jvmCrossinlineSAMDeclarationSite.kt");
+        }
+
         @TestMetadata("jvmDoubleInline.kt")
         public void testJvmDoubleInline() throws Exception {
             runTest("compiler/testData/codegen/boxInline/assert/jvmDoubleInline.kt");
+        }
+
+        @TestMetadata("jvmInlineUsedAsNoinline.kt")
+        public void testJvmInlineUsedAsNoinline() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/assert/jvmInlineUsedAsNoinline.kt");
         }
     }
 
@@ -671,11 +761,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class Builders extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInBuilders() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/builders"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/builders"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("builders.kt")
@@ -694,11 +784,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class BytecodePreprocessing extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInBytecodePreprocessing() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/bytecodePreprocessing"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/bytecodePreprocessing"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("apiVersionAtLeast1.kt")
@@ -712,11 +802,16 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class CallableReference extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
+        }
+
+        @TestMetadata("adapted.kt")
+        public void testAdapted() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/callableReference/adapted.kt");
         }
 
         public void testAllFilesPresentInCallableReference() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/callableReference"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/callableReference"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("classLevel.kt")
@@ -764,6 +859,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             runTest("compiler/testData/codegen/boxInline/callableReference/kt16411.kt");
         }
 
+        @TestMetadata("kt35101.kt")
+        public void testKt35101() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/callableReference/kt35101.kt");
+        }
+
         @TestMetadata("propertyIntrinsic.kt")
         public void testPropertyIntrinsic() throws Exception {
             runTest("compiler/testData/codegen/boxInline/callableReference/propertyIntrinsic.kt");
@@ -794,11 +894,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @RunWith(JUnit3RunnerWithInners.class)
         public static class Bound extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInBound() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/callableReference/bound"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/callableReference/bound"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("classProperty.kt")
@@ -834,6 +934,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             @TestMetadata("filter.kt")
             public void testFilter() throws Exception {
                 runTest("compiler/testData/codegen/boxInline/callableReference/bound/filter.kt");
+            }
+
+            @TestMetadata("inlineValueParameterInsteadOfReceiver.kt")
+            public void testInlineValueParameterInsteadOfReceiver() throws Exception {
+                runTest("compiler/testData/codegen/boxInline/callableReference/bound/inlineValueParameterInsteadOfReceiver.kt");
             }
 
             @TestMetadata("innerGenericConstuctor.kt")
@@ -923,11 +1028,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class Capture extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInCapture() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/capture"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/capture"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("captureInlinable.kt")
@@ -966,11 +1071,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class Complex extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInComplex() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/complex"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/complex"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("closureChain.kt")
@@ -1014,11 +1119,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class ComplexStack extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInComplexStack() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/complexStack"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/complexStack"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("asCheck.kt")
@@ -1029,6 +1134,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @TestMetadata("asCheck2.kt")
         public void testAsCheck2() throws Exception {
             runTest("compiler/testData/codegen/boxInline/complexStack/asCheck2.kt");
+        }
+
+        @TestMetadata("breakContinueInInlineLambdaArgument.kt")
+        public void testBreakContinueInInlineLambdaArgument() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/complexStack/breakContinueInInlineLambdaArgument.kt");
         }
 
         @TestMetadata("simple.kt")
@@ -1055,6 +1165,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         public void testSimpleExtension() throws Exception {
             runTest("compiler/testData/codegen/boxInline/complexStack/simpleExtension.kt");
         }
+
+        @TestMetadata("spillConstructorArgumentsAndInlineLambdaParameter.kt")
+        public void testSpillConstructorArgumentsAndInlineLambdaParameter() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/complexStack/spillConstructorArgumentsAndInlineLambdaParameter.kt");
+        }
     }
 
     @TestMetadata("compiler/testData/codegen/boxInline/contracts")
@@ -1062,11 +1177,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class Contracts extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInContracts() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/contracts"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/contracts"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("cfgDependendValInitialization.kt")
@@ -1150,7 +1265,7 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class DefaultValues extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         @TestMetadata("33Parameters.kt")
@@ -1164,7 +1279,7 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         }
 
         public void testAllFilesPresentInDefaultValues() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/defaultValues"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/defaultValues"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("defaultInExtension.kt")
@@ -1262,11 +1377,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @RunWith(JUnit3RunnerWithInners.class)
         public static class LambdaInlining extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInLambdaInlining() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/defaultValues/lambdaInlining"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/defaultValues/lambdaInlining"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("checkLambdaClassIsPresent.kt")
@@ -1434,11 +1549,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             @RunWith(JUnit3RunnerWithInners.class)
             public static class CallableReferences extends AbstractCompileKotlinAgainstInlineKotlinTest {
                 private void runTest(String testDataFilePath) throws Exception {
-                    KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                    KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
                 }
 
                 public void testAllFilesPresentInCallableReferences() throws Exception {
-                    KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/defaultValues/lambdaInlining/callableReferences"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                    KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/defaultValues/lambdaInlining/callableReferences"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
                 }
 
                 @TestMetadata("boundFunctionReference.kt")
@@ -1511,6 +1626,16 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
                     runTest("compiler/testData/codegen/boxInline/defaultValues/lambdaInlining/callableReferences/innerClassConstuctorReference.kt");
                 }
 
+                @TestMetadata("mutableBoundPropertyReferenceFromClass.kt")
+                public void testMutableBoundPropertyReferenceFromClass() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/defaultValues/lambdaInlining/callableReferences/mutableBoundPropertyReferenceFromClass.kt");
+                }
+
+                @TestMetadata("mutablePropertyReferenceFromClass.kt")
+                public void testMutablePropertyReferenceFromClass() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/defaultValues/lambdaInlining/callableReferences/mutablePropertyReferenceFromClass.kt");
+                }
+
                 @TestMetadata("privateFunctionReference.kt")
                 public void testPrivateFunctionReference() throws Exception {
                     runTest("compiler/testData/codegen/boxInline/defaultValues/lambdaInlining/callableReferences/privateFunctionReference.kt");
@@ -1548,7 +1673,7 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @RunWith(JUnit3RunnerWithInners.class)
         public static class MaskElimination extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             @TestMetadata("32Parameters.kt")
@@ -1562,7 +1687,7 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             }
 
             public void testAllFilesPresentInMaskElimination() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/defaultValues/maskElimination"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/defaultValues/maskElimination"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("kt18792.kt")
@@ -1597,11 +1722,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class DelegatedProperty extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInDelegatedProperty() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/delegatedProperty"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/delegatedProperty"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("kt16864.kt")
@@ -1612,6 +1737,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @TestMetadata("local.kt")
         public void testLocal() throws Exception {
             runTest("compiler/testData/codegen/boxInline/delegatedProperty/local.kt");
+        }
+
+        @TestMetadata("localDeclaredInLambda.kt")
+        public void testLocalDeclaredInLambda() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/delegatedProperty/localDeclaredInLambda.kt");
         }
 
         @TestMetadata("localInAnonymousObject.kt")
@@ -1630,11 +1760,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class EnclosingInfo extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInEnclosingInfo() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/enclosingInfo"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/enclosingInfo"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("anonymousInLambda.kt")
@@ -1678,11 +1808,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class Enum extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInEnum() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/enum"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/enum"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("kt10569.kt")
@@ -1756,11 +1886,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class FunctionExpression extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInFunctionExpression() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/functionExpression"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/functionExpression"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("extension.kt")
@@ -1774,16 +1904,193 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class InlineClasses extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInInlineClasses() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/inlineClasses"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/inlineClasses"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
+        }
+
+        @TestMetadata("inlineClassWithInlineValReturningInlineClass.kt")
+        public void testInlineClassWithInlineValReturningInlineClass() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/inlineClasses/inlineClassWithInlineValReturningInlineClass.kt");
         }
 
         @TestMetadata("inlineFunctionInsideInlineClassesBox.kt")
         public void testInlineFunctionInsideInlineClassesBox() throws Exception {
             runTest("compiler/testData/codegen/boxInline/inlineClasses/inlineFunctionInsideInlineClassesBox.kt");
+        }
+
+        @TestMetadata("noReturnTypeManglingFun.kt")
+        public void testNoReturnTypeManglingFun() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/inlineClasses/noReturnTypeManglingFun.kt");
+        }
+
+        @TestMetadata("noReturnTypeManglingFunJvmName.kt")
+        public void testNoReturnTypeManglingFunJvmName() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/inlineClasses/noReturnTypeManglingFunJvmName.kt");
+        }
+
+        @TestMetadata("noReturnTypeManglingVal.kt")
+        public void testNoReturnTypeManglingVal() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/inlineClasses/noReturnTypeManglingVal.kt");
+        }
+
+        @TestMetadata("withReturnTypeManglingFun.kt")
+        public void testWithReturnTypeManglingFun() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/inlineClasses/withReturnTypeManglingFun.kt");
+        }
+
+        @TestMetadata("withReturnTypeManglingFunJvmName.kt")
+        public void testWithReturnTypeManglingFunJvmName() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/inlineClasses/withReturnTypeManglingFunJvmName.kt");
+        }
+
+        @TestMetadata("withReturnTypeManglingVal.kt")
+        public void testWithReturnTypeManglingVal() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/inlineClasses/withReturnTypeManglingVal.kt");
+        }
+
+        @TestMetadata("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter")
+        @TestDataPath("$PROJECT_ROOT")
+        @RunWith(JUnit3RunnerWithInners.class)
+        public static class UnboxGenericParameter extends AbstractCompileKotlinAgainstInlineKotlinTest {
+            private void runTest(String testDataFilePath) throws Exception {
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
+            }
+
+            public void testAllFilesPresentInUnboxGenericParameter() throws Exception {
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
+            }
+
+            @TestMetadata("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/funInterface")
+            @TestDataPath("$PROJECT_ROOT")
+            @RunWith(JUnit3RunnerWithInners.class)
+            public static class FunInterface extends AbstractCompileKotlinAgainstInlineKotlinTest {
+                private void runTest(String testDataFilePath) throws Exception {
+                    KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
+                }
+
+                public void testAllFilesPresentInFunInterface() throws Exception {
+                    KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/funInterface"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
+                }
+
+                @TestMetadata("any.kt")
+                public void testAny() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/funInterface/any.kt");
+                }
+
+                @TestMetadata("anyN.kt")
+                public void testAnyN() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/funInterface/anyN.kt");
+                }
+
+                @TestMetadata("iface.kt")
+                public void testIface() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/funInterface/iface.kt");
+                }
+
+                @TestMetadata("ifaceChild.kt")
+                public void testIfaceChild() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/funInterface/ifaceChild.kt");
+                }
+
+                @TestMetadata("primitive.kt")
+                public void testPrimitive() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/funInterface/primitive.kt");
+                }
+
+                @TestMetadata("string.kt")
+                public void testString() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/funInterface/string.kt");
+                }
+            }
+
+            @TestMetadata("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/lambda")
+            @TestDataPath("$PROJECT_ROOT")
+            @RunWith(JUnit3RunnerWithInners.class)
+            public static class Lambda extends AbstractCompileKotlinAgainstInlineKotlinTest {
+                private void runTest(String testDataFilePath) throws Exception {
+                    KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
+                }
+
+                public void testAllFilesPresentInLambda() throws Exception {
+                    KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/lambda"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
+                }
+
+                @TestMetadata("any.kt")
+                public void testAny() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/lambda/any.kt");
+                }
+
+                @TestMetadata("anyN.kt")
+                public void testAnyN() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/lambda/anyN.kt");
+                }
+
+                @TestMetadata("iface.kt")
+                public void testIface() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/lambda/iface.kt");
+                }
+
+                @TestMetadata("ifaceChild.kt")
+                public void testIfaceChild() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/lambda/ifaceChild.kt");
+                }
+
+                @TestMetadata("primitive.kt")
+                public void testPrimitive() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/lambda/primitive.kt");
+                }
+
+                @TestMetadata("string.kt")
+                public void testString() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/lambda/string.kt");
+                }
+            }
+
+            @TestMetadata("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/objectLiteral")
+            @TestDataPath("$PROJECT_ROOT")
+            @RunWith(JUnit3RunnerWithInners.class)
+            public static class ObjectLiteral extends AbstractCompileKotlinAgainstInlineKotlinTest {
+                private void runTest(String testDataFilePath) throws Exception {
+                    KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
+                }
+
+                public void testAllFilesPresentInObjectLiteral() throws Exception {
+                    KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/objectLiteral"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
+                }
+
+                @TestMetadata("any.kt")
+                public void testAny() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/objectLiteral/any.kt");
+                }
+
+                @TestMetadata("anyN.kt")
+                public void testAnyN() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/objectLiteral/anyN.kt");
+                }
+
+                @TestMetadata("iface.kt")
+                public void testIface() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/objectLiteral/iface.kt");
+                }
+
+                @TestMetadata("ifaceChild.kt")
+                public void testIfaceChild() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/objectLiteral/ifaceChild.kt");
+                }
+
+                @TestMetadata("primitive.kt")
+                public void testPrimitive() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/objectLiteral/primitive.kt");
+                }
+
+                @TestMetadata("string.kt")
+                public void testString() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/inlineClasses/unboxGenericParameter/objectLiteral/string.kt");
+                }
+            }
         }
     }
 
@@ -1792,11 +2099,16 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class InnerClasses extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInInnerClasses() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/innerClasses"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/innerClasses"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
+        }
+
+        @TestMetadata("captureThisAndOuter.kt")
+        public void testCaptureThisAndOuter() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/innerClasses/captureThisAndOuter.kt");
         }
 
         @TestMetadata("innerLambda.kt")
@@ -1815,11 +2127,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class JvmPackageName extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInJvmPackageName() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/jvmPackageName"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/jvmPackageName"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("simple.kt")
@@ -1833,11 +2145,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class LambdaClassClash extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInLambdaClassClash() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/lambdaClassClash"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/lambdaClassClash"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("lambdaClassClash.kt")
@@ -1856,11 +2168,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class LambdaTransformation extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInLambdaTransformation() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/lambdaTransformation"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/lambdaTransformation"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("lambdaCloning.kt")
@@ -1883,6 +2195,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             runTest("compiler/testData/codegen/boxInline/lambdaTransformation/regeneratedLambdaName.kt");
         }
 
+        @TestMetadata("regeneratedLambdaName2.kt")
+        public void testRegeneratedLambdaName2() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/lambdaTransformation/regeneratedLambdaName2.kt");
+        }
+
         @TestMetadata("sameCaptured.kt")
         public void testSameCaptured() throws Exception {
             runTest("compiler/testData/codegen/boxInline/lambdaTransformation/sameCaptured.kt");
@@ -1894,11 +2211,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class LocalFunInLambda extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInLocalFunInLambda() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/localFunInLambda"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/localFunInLambda"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("defaultParam.kt")
@@ -1922,16 +2239,34 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         }
     }
 
+    @TestMetadata("compiler/testData/codegen/boxInline/multiModule")
+    @TestDataPath("$PROJECT_ROOT")
+    @RunWith(JUnit3RunnerWithInners.class)
+    public static class MultiModule extends AbstractCompileKotlinAgainstInlineKotlinTest {
+        private void runTest(String testDataFilePath) throws Exception {
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
+        }
+
+        public void testAllFilesPresentInMultiModule() throws Exception {
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/multiModule"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
+        }
+
+        @TestMetadata("tryCatchWithRecursiveInline.kt")
+        public void testTryCatchWithRecursiveInline() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/multiModule/tryCatchWithRecursiveInline.kt");
+        }
+    }
+
     @TestMetadata("compiler/testData/codegen/boxInline/multifileClasses")
     @TestDataPath("$PROJECT_ROOT")
     @RunWith(JUnit3RunnerWithInners.class)
     public static class MultifileClasses extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInMultifileClasses() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/multifileClasses"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/multifileClasses"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("defaultArguments.kt")
@@ -1955,11 +2290,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class Multiplatform extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInMultiplatform() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/multiplatform"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/multiplatform"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("compiler/testData/codegen/boxInline/multiplatform/defaultArguments")
@@ -1967,11 +2302,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @RunWith(JUnit3RunnerWithInners.class)
         public static class DefaultArguments extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInDefaultArguments() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/multiplatform/defaultArguments"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/multiplatform/defaultArguments"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("receiversAndParametersInLambda.kt")
@@ -1986,11 +2321,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class NoInline extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInNoInline() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/noInline"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/noInline"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("extensionReceiver.kt")
@@ -2034,16 +2369,21 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class NonLocalReturns extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInNonLocalReturns() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/nonLocalReturns"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/nonLocalReturns"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("explicitLocalReturn.kt")
         public void testExplicitLocalReturn() throws Exception {
             runTest("compiler/testData/codegen/boxInline/nonLocalReturns/explicitLocalReturn.kt");
+        }
+
+        @TestMetadata("fromInterfaceDefaultGetter.kt")
+        public void testFromInterfaceDefaultGetter() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/nonLocalReturns/fromInterfaceDefaultGetter.kt");
         }
 
         @TestMetadata("justReturnInLambda.kt")
@@ -2111,11 +2451,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @RunWith(JUnit3RunnerWithInners.class)
         public static class Deparenthesize extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInDeparenthesize() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/nonLocalReturns/deparenthesize"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/nonLocalReturns/deparenthesize"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("bracket.kt")
@@ -2134,11 +2474,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @RunWith(JUnit3RunnerWithInners.class)
         public static class TryFinally extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInTryFinally() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/nonLocalReturns/tryFinally"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/nonLocalReturns/tryFinally"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("kt16417.kt")
@@ -2211,11 +2551,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             @RunWith(JUnit3RunnerWithInners.class)
             public static class CallSite extends AbstractCompileKotlinAgainstInlineKotlinTest {
                 private void runTest(String testDataFilePath) throws Exception {
-                    KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                    KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
                 }
 
                 public void testAllFilesPresentInCallSite() throws Exception {
-                    KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/nonLocalReturns/tryFinally/callSite"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                    KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/nonLocalReturns/tryFinally/callSite"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
                 }
 
                 @TestMetadata("callSite.kt")
@@ -2254,11 +2594,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             @RunWith(JUnit3RunnerWithInners.class)
             public static class Chained extends AbstractCompileKotlinAgainstInlineKotlinTest {
                 private void runTest(String testDataFilePath) throws Exception {
-                    KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                    KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
                 }
 
                 public void testAllFilesPresentInChained() throws Exception {
-                    KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/nonLocalReturns/tryFinally/chained"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                    KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/nonLocalReturns/tryFinally/chained"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
                 }
 
                 @TestMetadata("finallyInFinally.kt")
@@ -2307,11 +2647,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             @RunWith(JUnit3RunnerWithInners.class)
             public static class DeclSite extends AbstractCompileKotlinAgainstInlineKotlinTest {
                 private void runTest(String testDataFilePath) throws Exception {
-                    KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                    KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
                 }
 
                 public void testAllFilesPresentInDeclSite() throws Exception {
-                    KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/nonLocalReturns/tryFinally/declSite"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                    KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/nonLocalReturns/tryFinally/declSite"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
                 }
 
                 @TestMetadata("complex.kt")
@@ -2380,11 +2720,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             @RunWith(JUnit3RunnerWithInners.class)
             public static class ExceptionTable extends AbstractCompileKotlinAgainstInlineKotlinTest {
                 private void runTest(String testDataFilePath) throws Exception {
-                    KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                    KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
                 }
 
                 public void testAllFilesPresentInExceptionTable() throws Exception {
-                    KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/nonLocalReturns/tryFinally/exceptionTable"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                    KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/nonLocalReturns/tryFinally/exceptionTable"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
                 }
 
                 @TestMetadata("break.kt")
@@ -2420,6 +2760,31 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
                 @TestMetadata("innerAndExternalSimple.kt")
                 public void testInnerAndExternalSimple() throws Exception {
                     runTest("compiler/testData/codegen/boxInline/nonLocalReturns/tryFinally/exceptionTable/innerAndExternalSimple.kt");
+                }
+
+                @TestMetadata("kt31653.kt")
+                public void testKt31653() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/nonLocalReturns/tryFinally/exceptionTable/kt31653.kt");
+                }
+
+                @TestMetadata("kt31653_2.kt")
+                public void testKt31653_2() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/nonLocalReturns/tryFinally/exceptionTable/kt31653_2.kt");
+                }
+
+                @TestMetadata("kt31923.kt")
+                public void testKt31923() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/nonLocalReturns/tryFinally/exceptionTable/kt31923.kt");
+                }
+
+                @TestMetadata("kt31923_2.kt")
+                public void testKt31923_2() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/nonLocalReturns/tryFinally/exceptionTable/kt31923_2.kt");
+                }
+
+                @TestMetadata("kt31923_wrong.kt")
+                public void testKt31923_wrong() throws Exception {
+                    runTest("compiler/testData/codegen/boxInline/nonLocalReturns/tryFinally/exceptionTable/kt31923_wrong.kt");
                 }
 
                 @TestMetadata("nested.kt")
@@ -2473,11 +2838,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             @RunWith(JUnit3RunnerWithInners.class)
             public static class Variables extends AbstractCompileKotlinAgainstInlineKotlinTest {
                 private void runTest(String testDataFilePath) throws Exception {
-                    KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                    KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
                 }
 
                 public void testAllFilesPresentInVariables() throws Exception {
-                    KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/nonLocalReturns/tryFinally/variables"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                    KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/nonLocalReturns/tryFinally/variables"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
                 }
 
                 @TestMetadata("kt7792.kt")
@@ -2488,34 +2853,16 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         }
     }
 
-    @TestMetadata("compiler/testData/codegen/boxInline/nullChecks")
-    @TestDataPath("$PROJECT_ROOT")
-    @RunWith(JUnit3RunnerWithInners.class)
-    public static class NullChecks extends AbstractCompileKotlinAgainstInlineKotlinTest {
-        private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
-        }
-
-        public void testAllFilesPresentInNullChecks() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/nullChecks"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
-        }
-
-        @TestMetadata("parameterNullCheck_1_4.kt")
-        public void testParameterNullCheck_1_4() throws Exception {
-            runTest("compiler/testData/codegen/boxInline/nullChecks/parameterNullCheck_1_4.kt");
-        }
-    }
-
     @TestMetadata("compiler/testData/codegen/boxInline/optimizations")
     @TestDataPath("$PROJECT_ROOT")
     @RunWith(JUnit3RunnerWithInners.class)
     public static class Optimizations extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInOptimizations() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/optimizations"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/optimizations"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("kt20844.kt")
@@ -2529,7 +2876,7 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class Private extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         @TestMetadata("accessorForConst.kt")
@@ -2548,7 +2895,7 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         }
 
         public void testAllFilesPresentInPrivate() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/private"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/private"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("effectivePrivate.kt")
@@ -2602,11 +2949,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class Property extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInProperty() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/property"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/property"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("augAssignmentAndInc.kt")
@@ -2637,6 +2984,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @TestMetadata("augAssignmentAndIncViaConvention.kt")
         public void testAugAssignmentAndIncViaConvention() throws Exception {
             runTest("compiler/testData/codegen/boxInline/property/augAssignmentAndIncViaConvention.kt");
+        }
+
+        @TestMetadata("fromObject.kt")
+        public void testFromObject() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/property/fromObject.kt");
         }
 
         @TestMetadata("kt22649.kt")
@@ -2675,11 +3027,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class Reified extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInReified() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/reified"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/reified"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("arrayConstructor.kt")
@@ -2700,6 +3052,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @TestMetadata("capturedLambda2.kt")
         public void testCapturedLambda2() throws Exception {
             runTest("compiler/testData/codegen/boxInline/reified/capturedLambda2.kt");
+        }
+
+        @TestMetadata("dontSubstituteNonReified.kt")
+        public void testDontSubstituteNonReified() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/reified/dontSubstituteNonReified.kt");
         }
 
         @TestMetadata("kt11081.kt")
@@ -2772,6 +3129,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             runTest("compiler/testData/codegen/boxInline/reified/kt9637_2.kt");
         }
 
+        @TestMetadata("nonCapturingObjectInLambda.kt")
+        public void testNonCapturingObjectInLambda() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/reified/nonCapturingObjectInLambda.kt");
+        }
+
         @TestMetadata("packages.kt")
         public void testPackages() throws Exception {
             runTest("compiler/testData/codegen/boxInline/reified/packages.kt");
@@ -2782,16 +3144,31 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @RunWith(JUnit3RunnerWithInners.class)
         public static class CheckCast extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInCheckCast() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/reified/checkCast"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/reified/checkCast"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("chain.kt")
             public void testChain() throws Exception {
                 runTest("compiler/testData/codegen/boxInline/reified/checkCast/chain.kt");
+            }
+
+            @TestMetadata("kt26435.kt")
+            public void testKt26435() throws Exception {
+                runTest("compiler/testData/codegen/boxInline/reified/checkCast/kt26435.kt");
+            }
+
+            @TestMetadata("kt26435_2.kt")
+            public void testKt26435_2() throws Exception {
+                runTest("compiler/testData/codegen/boxInline/reified/checkCast/kt26435_2.kt");
+            }
+
+            @TestMetadata("kt26435_3.kt")
+            public void testKt26435_3() throws Exception {
+                runTest("compiler/testData/codegen/boxInline/reified/checkCast/kt26435_3.kt");
             }
 
             @TestMetadata("kt8043.kt")
@@ -2818,6 +3195,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             public void testSimpleSafe() throws Exception {
                 runTest("compiler/testData/codegen/boxInline/reified/checkCast/simpleSafe.kt");
             }
+
+            @TestMetadata("simple_1_3.kt")
+            public void testSimple_1_3() throws Exception {
+                runTest("compiler/testData/codegen/boxInline/reified/checkCast/simple_1_3.kt");
+            }
         }
 
         @TestMetadata("compiler/testData/codegen/boxInline/reified/defaultLambda")
@@ -2825,11 +3207,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @RunWith(JUnit3RunnerWithInners.class)
         public static class DefaultLambda extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInDefaultLambda() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/reified/defaultLambda"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/reified/defaultLambda"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("chain.kt")
@@ -2878,11 +3260,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @RunWith(JUnit3RunnerWithInners.class)
         public static class IsCheck extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInIsCheck() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/reified/isCheck"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/reified/isCheck"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("chain.kt")
@@ -2907,11 +3289,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class Signature extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInSignature() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/signature"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/signature"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("inProjectionSubstitution.kt")
@@ -2965,11 +3347,16 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class Simple extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInSimple() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/simple"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/simple"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
+        }
+
+        @TestMetadata("captureAndArgumentIncompatibleTypes.kt")
+        public void testCaptureAndArgumentIncompatibleTypes() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/simple/captureAndArgumentIncompatibleTypes.kt");
         }
 
         @TestMetadata("classObject.kt")
@@ -3093,11 +3480,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class Smap extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInSmap() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/smap"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/smap"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("assertion.kt")
@@ -3105,14 +3492,34 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             runTest("compiler/testData/codegen/boxInline/smap/assertion.kt");
         }
 
+        @TestMetadata("classCycle.kt")
+        public void testClassCycle() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/smap/classCycle.kt");
+        }
+
         @TestMetadata("classFromDefaultPackage.kt")
         public void testClassFromDefaultPackage() throws Exception {
             runTest("compiler/testData/codegen/boxInline/smap/classFromDefaultPackage.kt");
         }
 
+        @TestMetadata("crossroutines.kt")
+        public void testCrossroutines() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/smap/crossroutines.kt");
+        }
+
         @TestMetadata("defaultFunction.kt")
         public void testDefaultFunction() throws Exception {
             runTest("compiler/testData/codegen/boxInline/smap/defaultFunction.kt");
+        }
+
+        @TestMetadata("defaultFunctionWithInlineCall.kt")
+        public void testDefaultFunctionWithInlineCall() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/smap/defaultFunctionWithInlineCall.kt");
+        }
+
+        @TestMetadata("interleavedFiles.kt")
+        public void testInterleavedFiles() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/smap/interleavedFiles.kt");
         }
 
         @TestMetadata("kt23369.kt")
@@ -3130,9 +3537,29 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             runTest("compiler/testData/codegen/boxInline/smap/kt23369_3.kt");
         }
 
+        @TestMetadata("kt35006.kt")
+        public void testKt35006() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/smap/kt35006.kt");
+        }
+
+        @TestMetadata("multiFileFacade.kt")
+        public void testMultiFileFacade() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/smap/multiFileFacade.kt");
+        }
+
         @TestMetadata("oneFile.kt")
         public void testOneFile() throws Exception {
             runTest("compiler/testData/codegen/boxInline/smap/oneFile.kt");
+        }
+
+        @TestMetadata("rangeFolding.kt")
+        public void testRangeFolding() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/smap/rangeFolding.kt");
+        }
+
+        @TestMetadata("rangeFoldingInClass.kt")
+        public void testRangeFoldingInClass() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/smap/rangeFoldingInClass.kt");
         }
 
         @TestMetadata("smap.kt")
@@ -3140,16 +3567,26 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             runTest("compiler/testData/codegen/boxInline/smap/smap.kt");
         }
 
+        @TestMetadata("smapWithNewSyntax.kt")
+        public void testSmapWithNewSyntax() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/smap/smapWithNewSyntax.kt");
+        }
+
+        @TestMetadata("smapWithOldSyntax.kt")
+        public void testSmapWithOldSyntax() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/smap/smapWithOldSyntax.kt");
+        }
+
         @TestMetadata("compiler/testData/codegen/boxInline/smap/anonymous")
         @TestDataPath("$PROJECT_ROOT")
         @RunWith(JUnit3RunnerWithInners.class)
         public static class Anonymous extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInAnonymous() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/smap/anonymous"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/smap/anonymous"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("kt19175.kt")
@@ -3208,11 +3645,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @RunWith(JUnit3RunnerWithInners.class)
         public static class DefaultLambda extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInDefaultLambda() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/smap/defaultLambda"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/smap/defaultLambda"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("defaultLambdaInAnonymous.kt")
@@ -3266,11 +3703,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @RunWith(JUnit3RunnerWithInners.class)
         public static class InlineOnly extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInInlineOnly() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/smap/inlineOnly"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/smap/inlineOnly"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("noSmap.kt")
@@ -3292,6 +3729,16 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             public void testReifiedProperty() throws Exception {
                 runTest("compiler/testData/codegen/boxInline/smap/inlineOnly/reifiedProperty.kt");
             }
+
+            @TestMetadata("stdlibInlineOnly.kt")
+            public void testStdlibInlineOnly() throws Exception {
+                runTest("compiler/testData/codegen/boxInline/smap/inlineOnly/stdlibInlineOnly.kt");
+            }
+
+            @TestMetadata("stdlibInlineOnlyOneLine.kt")
+            public void testStdlibInlineOnlyOneLine() throws Exception {
+                runTest("compiler/testData/codegen/boxInline/smap/inlineOnly/stdlibInlineOnlyOneLine.kt");
+            }
         }
 
         @TestMetadata("compiler/testData/codegen/boxInline/smap/newsmap")
@@ -3299,11 +3746,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @RunWith(JUnit3RunnerWithInners.class)
         public static class Newsmap extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInNewsmap() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/smap/newsmap"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/smap/newsmap"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("differentMapping.kt")
@@ -3332,11 +3779,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @RunWith(JUnit3RunnerWithInners.class)
         public static class Resolve extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInResolve() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/smap/resolve"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/smap/resolve"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("inlineComponent.kt")
@@ -3356,11 +3803,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class Special extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInSpecial() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/special"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/special"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("identityCheck.kt")
@@ -3402,6 +3849,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         public void testStackHeightBug() throws Exception {
             runTest("compiler/testData/codegen/boxInline/special/stackHeightBug.kt");
         }
+
+        @TestMetadata("unusedInlineLambda.kt")
+        public void testUnusedInlineLambda() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/special/unusedInlineLambda.kt");
+        }
     }
 
     @TestMetadata("compiler/testData/codegen/boxInline/stackOnReturn")
@@ -3409,11 +3861,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class StackOnReturn extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInStackOnReturn() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/stackOnReturn"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/stackOnReturn"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("elvis.kt")
@@ -3476,6 +3928,16 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             runTest("compiler/testData/codegen/boxInline/stackOnReturn/nonLocalReturn3.kt");
         }
 
+        @TestMetadata("poppedLocalReturn.kt")
+        public void testPoppedLocalReturn() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/stackOnReturn/poppedLocalReturn.kt");
+        }
+
+        @TestMetadata("poppedLocalReturn2.kt")
+        public void testPoppedLocalReturn2() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/stackOnReturn/poppedLocalReturn2.kt");
+        }
+
         @TestMetadata("returnLong.kt")
         public void testReturnLong() throws Exception {
             runTest("compiler/testData/codegen/boxInline/stackOnReturn/returnLong.kt");
@@ -3492,15 +3954,15 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class Suspend extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         private void runTestWithPackageReplacement(String testDataFilePath, String packageName) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(filePath -> doTestWithCoroutinesPackageReplacement(filePath, packageName), TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(filePath -> doTestWithCoroutinesPackageReplacement(filePath, packageName), TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInSuspend() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/suspend"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/suspend"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("capturedVariables.kt")
@@ -3521,6 +3983,31 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @TestMetadata("crossinlineSuspendLambdaInsideCrossinlineSuspendLambda.kt")
         public void testCrossinlineSuspendLambdaInsideCrossinlineSuspendLambda_1_3() throws Exception {
             runTestWithPackageReplacement("compiler/testData/codegen/boxInline/suspend/crossinlineSuspendLambdaInsideCrossinlineSuspendLambda.kt", "kotlin.coroutines");
+        }
+
+        @TestMetadata("debugMetadataCrossinline.kt")
+        public void testDebugMetadataCrossinline() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/suspend/debugMetadataCrossinline.kt");
+        }
+
+        @TestMetadata("delegatedProperties.kt")
+        public void testDelegatedProperties_1_2() throws Exception {
+            runTestWithPackageReplacement("compiler/testData/codegen/boxInline/suspend/delegatedProperties.kt", "kotlin.coroutines.experimental");
+        }
+
+        @TestMetadata("delegatedProperties.kt")
+        public void testDelegatedProperties_1_3() throws Exception {
+            runTestWithPackageReplacement("compiler/testData/codegen/boxInline/suspend/delegatedProperties.kt", "kotlin.coroutines");
+        }
+
+        @TestMetadata("doubleRegenerationWithNonSuspendingLambda.kt")
+        public void testDoubleRegenerationWithNonSuspendingLambda_1_2() throws Exception {
+            runTestWithPackageReplacement("compiler/testData/codegen/boxInline/suspend/doubleRegenerationWithNonSuspendingLambda.kt", "kotlin.coroutines.experimental");
+        }
+
+        @TestMetadata("doubleRegenerationWithNonSuspendingLambda.kt")
+        public void testDoubleRegenerationWithNonSuspendingLambda_1_3() throws Exception {
+            runTestWithPackageReplacement("compiler/testData/codegen/boxInline/suspend/doubleRegenerationWithNonSuspendingLambda.kt", "kotlin.coroutines");
         }
 
         @TestMetadata("enclodingMethod.kt")
@@ -3566,6 +4053,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @TestMetadata("inlineSuspendContinuation.kt")
         public void testInlineSuspendContinuation_1_3() throws Exception {
             runTestWithPackageReplacement("compiler/testData/codegen/boxInline/suspend/inlineSuspendContinuation.kt", "kotlin.coroutines");
+        }
+
+        @TestMetadata("inlineSuspendInMultifileClass.kt")
+        public void testInlineSuspendInMultifileClass() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/suspend/inlineSuspendInMultifileClass.kt");
         }
 
         @TestMetadata("inlineSuspendOfCrossinlineOrdinary.kt")
@@ -3628,6 +4120,16 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             runTestWithPackageReplacement("compiler/testData/codegen/boxInline/suspend/inlineSuspendOfSuspend.kt", "kotlin.coroutines");
         }
 
+        @TestMetadata("jvmName.kt")
+        public void testJvmName_1_2() throws Exception {
+            runTestWithPackageReplacement("compiler/testData/codegen/boxInline/suspend/jvmName.kt", "kotlin.coroutines.experimental");
+        }
+
+        @TestMetadata("jvmName.kt")
+        public void testJvmName_1_3() throws Exception {
+            runTestWithPackageReplacement("compiler/testData/codegen/boxInline/suspend/jvmName.kt", "kotlin.coroutines");
+        }
+
         @TestMetadata("kt26658.kt")
         public void testKt26658() throws Exception {
             runTest("compiler/testData/codegen/boxInline/suspend/kt26658.kt");
@@ -3663,6 +4165,16 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             runTestWithPackageReplacement("compiler/testData/codegen/boxInline/suspend/multipleSuspensionPoints.kt", "kotlin.coroutines");
         }
 
+        @TestMetadata("nestedMethodWith2XParameter.kt")
+        public void testNestedMethodWith2XParameter() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/suspend/nestedMethodWith2XParameter.kt");
+        }
+
+        @TestMetadata("nonLocalReturn.kt")
+        public void testNonLocalReturn() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/suspend/nonLocalReturn.kt");
+        }
+
         @TestMetadata("nonSuspendCrossinline.kt")
         public void testNonSuspendCrossinline_1_2() throws Exception {
             runTestWithPackageReplacement("compiler/testData/codegen/boxInline/suspend/nonSuspendCrossinline.kt", "kotlin.coroutines.experimental");
@@ -3683,6 +4195,16 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             runTestWithPackageReplacement("compiler/testData/codegen/boxInline/suspend/returnValue.kt", "kotlin.coroutines");
         }
 
+        @TestMetadata("tryCatchReceiver.kt")
+        public void testTryCatchReceiver_1_2() throws Exception {
+            runTestWithPackageReplacement("compiler/testData/codegen/boxInline/suspend/tryCatchReceiver.kt", "kotlin.coroutines.experimental");
+        }
+
+        @TestMetadata("tryCatchReceiver.kt")
+        public void testTryCatchReceiver_1_3() throws Exception {
+            runTestWithPackageReplacement("compiler/testData/codegen/boxInline/suspend/tryCatchReceiver.kt", "kotlin.coroutines");
+        }
+
         @TestMetadata("tryCatchStackTransform.kt")
         public void testTryCatchStackTransform_1_2() throws Exception {
             runTestWithPackageReplacement("compiler/testData/codegen/boxInline/suspend/tryCatchStackTransform.kt", "kotlin.coroutines.experimental");
@@ -3693,21 +4215,51 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             runTestWithPackageReplacement("compiler/testData/codegen/boxInline/suspend/tryCatchStackTransform.kt", "kotlin.coroutines");
         }
 
+        @TestMetadata("twiceRegeneratedAnonymousObject.kt")
+        public void testTwiceRegeneratedAnonymousObject() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/suspend/twiceRegeneratedAnonymousObject.kt");
+        }
+
+        @TestMetadata("twiceRegeneratedSuspendLambda.kt")
+        public void testTwiceRegeneratedSuspendLambda() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/suspend/twiceRegeneratedSuspendLambda.kt");
+        }
+
         @TestMetadata("compiler/testData/codegen/boxInline/suspend/callableReference")
         @TestDataPath("$PROJECT_ROOT")
         @RunWith(JUnit3RunnerWithInners.class)
         public static class CallableReference extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInCallableReference() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/suspend/callableReference"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/suspend/callableReference"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
+            }
+
+            @TestMetadata("isAsReified.kt")
+            public void testIsAsReified() throws Exception {
+                runTest("compiler/testData/codegen/boxInline/suspend/callableReference/isAsReified.kt");
+            }
+
+            @TestMetadata("isAsReified2.kt")
+            public void testIsAsReified2() throws Exception {
+                runTest("compiler/testData/codegen/boxInline/suspend/callableReference/isAsReified2.kt");
+            }
+
+            @TestMetadata("nonTailCall.kt")
+            public void testNonTailCall() throws Exception {
+                runTest("compiler/testData/codegen/boxInline/suspend/callableReference/nonTailCall.kt");
             }
 
             @TestMetadata("simple.kt")
             public void testSimple() throws Exception {
                 runTest("compiler/testData/codegen/boxInline/suspend/callableReference/simple.kt");
+            }
+
+            @TestMetadata("unitReturn.kt")
+            public void testUnitReturn() throws Exception {
+                runTest("compiler/testData/codegen/boxInline/suspend/callableReference/unitReturn.kt");
             }
         }
 
@@ -3716,15 +4268,15 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @RunWith(JUnit3RunnerWithInners.class)
         public static class DefaultParameter extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             private void runTestWithPackageReplacement(String testDataFilePath, String packageName) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(filePath -> doTestWithCoroutinesPackageReplacement(filePath, packageName), TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(filePath -> doTestWithCoroutinesPackageReplacement(filePath, packageName), TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInDefaultParameter() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/suspend/defaultParameter"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/suspend/defaultParameter"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("defaultValueCrossinline.kt")
@@ -3735,6 +4287,21 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             @TestMetadata("defaultValueCrossinline.kt")
             public void testDefaultValueCrossinline_1_3() throws Exception {
                 runTestWithPackageReplacement("compiler/testData/codegen/boxInline/suspend/defaultParameter/defaultValueCrossinline.kt", "kotlin.coroutines");
+            }
+
+            @TestMetadata("defaultValueInClass.kt")
+            public void testDefaultValueInClass() throws Exception {
+                runTest("compiler/testData/codegen/boxInline/suspend/defaultParameter/defaultValueInClass.kt");
+            }
+
+            @TestMetadata("defaultValueInlineFromMultiFileFacade.kt")
+            public void testDefaultValueInlineFromMultiFileFacade_1_2() throws Exception {
+                runTestWithPackageReplacement("compiler/testData/codegen/boxInline/suspend/defaultParameter/defaultValueInlineFromMultiFileFacade.kt", "kotlin.coroutines.experimental");
+            }
+
+            @TestMetadata("defaultValueInlineFromMultiFileFacade.kt")
+            public void testDefaultValueInlineFromMultiFileFacade_1_3() throws Exception {
+                runTestWithPackageReplacement("compiler/testData/codegen/boxInline/suspend/defaultParameter/defaultValueInlineFromMultiFileFacade.kt", "kotlin.coroutines");
             }
 
             @TestMetadata("defaultValueInline.kt")
@@ -3748,16 +4315,39 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             }
         }
 
+        @TestMetadata("compiler/testData/codegen/boxInline/suspend/inlineClass")
+        @TestDataPath("$PROJECT_ROOT")
+        @RunWith(JUnit3RunnerWithInners.class)
+        public static class InlineClass extends AbstractCompileKotlinAgainstInlineKotlinTest {
+            private void runTest(String testDataFilePath) throws Exception {
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
+            }
+
+            public void testAllFilesPresentInInlineClass() throws Exception {
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/suspend/inlineClass"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
+            }
+
+            @TestMetadata("returnUnboxedDirect.kt")
+            public void testReturnUnboxedDirect() throws Exception {
+                runTest("compiler/testData/codegen/boxInline/suspend/inlineClass/returnUnboxedDirect.kt");
+            }
+
+            @TestMetadata("returnUnboxedResume.kt")
+            public void testReturnUnboxedResume() throws Exception {
+                runTest("compiler/testData/codegen/boxInline/suspend/inlineClass/returnUnboxedResume.kt");
+            }
+        }
+
         @TestMetadata("compiler/testData/codegen/boxInline/suspend/inlineUsedAsNoinline")
         @TestDataPath("$PROJECT_ROOT")
         @RunWith(JUnit3RunnerWithInners.class)
         public static class InlineUsedAsNoinline extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInInlineUsedAsNoinline() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/suspend/inlineUsedAsNoinline"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/suspend/inlineUsedAsNoinline"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("inlineOnly.kt")
@@ -3769,6 +4359,16 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             public void testSimpleNamed() throws Exception {
                 runTest("compiler/testData/codegen/boxInline/suspend/inlineUsedAsNoinline/simpleNamed.kt");
             }
+
+            @TestMetadata("withCapturedInlineLambda.kt")
+            public void testWithCapturedInlineLambda() throws Exception {
+                runTest("compiler/testData/codegen/boxInline/suspend/inlineUsedAsNoinline/withCapturedInlineLambda.kt");
+            }
+
+            @TestMetadata("withCapturedInlineLambda2.kt")
+            public void testWithCapturedInlineLambda2() throws Exception {
+                runTest("compiler/testData/codegen/boxInline/suspend/inlineUsedAsNoinline/withCapturedInlineLambda2.kt");
+            }
         }
 
         @TestMetadata("compiler/testData/codegen/boxInline/suspend/receiver")
@@ -3776,15 +4376,15 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @RunWith(JUnit3RunnerWithInners.class)
         public static class Receiver extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             private void runTestWithPackageReplacement(String testDataFilePath, String packageName) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(filePath -> doTestWithCoroutinesPackageReplacement(filePath, packageName), TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(filePath -> doTestWithCoroutinesPackageReplacement(filePath, packageName), TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInReceiver() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/suspend/receiver"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/suspend/receiver"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("inlineOrdinaryOfCrossinlineSuspend.kt")
@@ -3873,15 +4473,15 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @RunWith(JUnit3RunnerWithInners.class)
         public static class StateMachine extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             private void runTestWithPackageReplacement(String testDataFilePath, String packageName) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(filePath -> doTestWithCoroutinesPackageReplacement(filePath, packageName), TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(filePath -> doTestWithCoroutinesPackageReplacement(filePath, packageName), TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInStateMachine() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/suspend/stateMachine"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/suspend/stateMachine"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("crossingCoroutineBoundaries.kt")
@@ -4014,6 +4614,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
                 runTestWithPackageReplacement("compiler/testData/codegen/boxInline/suspend/stateMachine/insideObject.kt", "kotlin.coroutines");
             }
 
+            @TestMetadata("lambdaTransformation.kt")
+            public void testLambdaTransformation() throws Exception {
+                runTest("compiler/testData/codegen/boxInline/suspend/stateMachine/lambdaTransformation.kt");
+            }
+
             @TestMetadata("normalInline.kt")
             public void testNormalInline_1_2() throws Exception {
                 runTestWithPackageReplacement("compiler/testData/codegen/boxInline/suspend/stateMachine/normalInline.kt", "kotlin.coroutines.experimental");
@@ -4101,11 +4706,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class SyntheticAccessors extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInSyntheticAccessors() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/syntheticAccessors"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/syntheticAccessors"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("constField.kt")
@@ -4138,6 +4743,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
             runTest("compiler/testData/codegen/boxInline/syntheticAccessors/superCall.kt");
         }
 
+        @TestMetadata("superCallFromMultipleSubclasses.kt")
+        public void testSuperCallFromMultipleSubclasses() throws Exception {
+            runTest("compiler/testData/codegen/boxInline/syntheticAccessors/superCallFromMultipleSubclasses.kt");
+        }
+
         @TestMetadata("superProperty.kt")
         public void testSuperProperty() throws Exception {
             runTest("compiler/testData/codegen/boxInline/syntheticAccessors/superProperty.kt");
@@ -4148,11 +4758,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
         @RunWith(JUnit3RunnerWithInners.class)
         public static class WithinInlineLambda extends AbstractCompileKotlinAgainstInlineKotlinTest {
             private void runTest(String testDataFilePath) throws Exception {
-                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+                KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
             }
 
             public void testAllFilesPresentInWithinInlineLambda() throws Exception {
-                KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/syntheticAccessors/withinInlineLambda"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+                KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/syntheticAccessors/withinInlineLambda"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
             }
 
             @TestMetadata("directFieldAccess.kt")
@@ -4175,6 +4785,21 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
                 runTest("compiler/testData/codegen/boxInline/syntheticAccessors/withinInlineLambda/privateInCrossInline.kt");
             }
 
+            @TestMetadata("privateInDefaultStubArgument.kt")
+            public void testPrivateInDefaultStubArgument() throws Exception {
+                runTest("compiler/testData/codegen/boxInline/syntheticAccessors/withinInlineLambda/privateInDefaultStubArgument.kt");
+            }
+
+            @TestMetadata("protectedInCrossinline.kt")
+            public void testProtectedInCrossinline() throws Exception {
+                runTest("compiler/testData/codegen/boxInline/syntheticAccessors/withinInlineLambda/protectedInCrossinline.kt");
+            }
+
+            @TestMetadata("protectedMembersFromSuper.kt")
+            public void testProtectedMembersFromSuper() throws Exception {
+                runTest("compiler/testData/codegen/boxInline/syntheticAccessors/withinInlineLambda/protectedMembersFromSuper.kt");
+            }
+
             @TestMetadata("superCall.kt")
             public void testSuperCall() throws Exception {
                 runTest("compiler/testData/codegen/boxInline/syntheticAccessors/withinInlineLambda/superCall.kt");
@@ -4192,11 +4817,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class Trait extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInTrait() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/trait"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/trait"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("trait.kt")
@@ -4210,11 +4835,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class TryCatchFinally extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInTryCatchFinally() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/tryCatchFinally"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/tryCatchFinally"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("kt5863.kt")
@@ -4243,11 +4868,11 @@ public class CompileKotlinAgainstInlineKotlinTestGenerated extends AbstractCompi
     @RunWith(JUnit3RunnerWithInners.class)
     public static class Varargs extends AbstractCompileKotlinAgainstInlineKotlinTest {
         private void runTest(String testDataFilePath) throws Exception {
-            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE:");
+            KotlinTestUtils.runTestWithCustomIgnoreDirective(this::doTest, TargetBackend.JVM, testDataFilePath, "// IGNORE_BACKEND_MULTI_MODULE: ");
         }
 
         public void testAllFilesPresentInVarargs() throws Exception {
-            KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("compiler/testData/codegen/boxInline/varargs"), Pattern.compile("^(.+)\\.kt$"), TargetBackend.JVM, true);
+            KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("compiler/testData/codegen/boxInline/varargs"), Pattern.compile("^(.+)\\.kt$"), null, TargetBackend.JVM, true);
         }
 
         @TestMetadata("kt17653.kt")

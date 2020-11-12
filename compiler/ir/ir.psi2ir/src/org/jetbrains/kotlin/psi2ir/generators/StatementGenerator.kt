@@ -16,6 +16,7 @@
 
 package org.jetbrains.kotlin.psi2ir.generators
 
+import org.jetbrains.kotlin.backend.common.BackendException
 import org.jetbrains.kotlin.descriptors.CallableDescriptor
 import org.jetbrains.kotlin.descriptors.ClassDescriptor
 import org.jetbrains.kotlin.descriptors.DeclarationDescriptor
@@ -73,7 +74,11 @@ class StatementGenerator(
     private fun KtElement.genStmt(): IrStatement =
         try {
             deparenthesize().accept(this@StatementGenerator, null)
-        } catch (e: Exception) {
+        } catch (e: BackendException) {
+            throw e
+        } catch (e: ErrorExpressionException) {
+            throw e
+        } catch (e: Throwable) {
             ErrorExpressionGenerator(this@StatementGenerator).generateErrorExpression(this, e)
         }
 
@@ -161,7 +166,7 @@ class StatementGenerator(
         val isBlockBody = expression.parent is KtDeclarationWithBody && expression.parent !is KtFunctionLiteral
         if (isBlockBody) throw AssertionError("Use IrBlockBody and corresponding body generator to generate blocks as function bodies")
 
-        val returnType = getInferredTypeWithImplicitCasts(expression) ?: context.builtIns.unitType
+        val returnType = getExpressionTypeWithCoercionToUnitOrFail(expression)
         val irBlock = IrBlockImpl(expression.startOffsetSkippingComments, expression.endOffset, returnType.toIrType())
 
         expression.statements.forEach {
@@ -226,14 +231,14 @@ class StatementGenerator(
         context.constantValueGenerator.generateConstantValueAsExpression(
             expression.startOffsetSkippingComments,
             expression.endOffset,
-            constant.toConstantValue(getInferredTypeWithImplicitCastsOrFail(expression))
+            constant.toConstantValue(getTypeInferredByFrontendOrFail(expression))
         )
 
     override fun visitStringTemplateExpression(expression: KtStringTemplateExpression, data: Nothing?): IrStatement {
         val startOffset = expression.startOffsetSkippingComments
         val endOffset = expression.endOffset
 
-        val resultType = getInferredTypeWithImplicitCastsOrFail(expression).toIrType()
+        val resultType = getTypeInferredByFrontendOrFail(expression).toIrType()
         val entries = expression.entries.map { it.genExpr() }.postprocessStringTemplateEntries()
 
         return when (entries.size) {
@@ -368,10 +373,11 @@ class StatementGenerator(
     override fun visitSafeQualifiedExpression(expression: KtSafeQualifiedExpression, data: Nothing?): IrStatement =
         expression.selectorExpression!!.accept(this, data)
 
-    private fun isInsideClass(classDescriptor: ClassDescriptor): Boolean {
+    private fun isThisForClassPhysicallyAvailable(classDescriptor: ClassDescriptor): Boolean {
         var scopeDescriptor: DeclarationDescriptor? = scopeOwner
         while (scopeDescriptor != null) {
             if (scopeDescriptor == classDescriptor) return true
+            if (scopeDescriptor is ClassDescriptor && !scopeDescriptor.isInner) return false
             scopeDescriptor = scopeDescriptor.containingDeclaration
         }
         return false
@@ -381,7 +387,7 @@ class StatementGenerator(
         val thisAsReceiverParameter = classDescriptor.thisAsReceiverParameter
         val thisType = kotlinType.toIrType()
 
-        return if (DescriptorUtils.isObject(classDescriptor) && !isInsideClass(classDescriptor)) {
+        return if (DescriptorUtils.isObject(classDescriptor) && !isThisForClassPhysicallyAvailable(classDescriptor)) {
             IrGetObjectValueImpl(
                 startOffset, endOffset,
                 thisType,

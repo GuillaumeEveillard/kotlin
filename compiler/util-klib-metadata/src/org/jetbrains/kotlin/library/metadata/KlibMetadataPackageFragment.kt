@@ -18,14 +18,51 @@ import org.jetbrains.kotlin.serialization.deserialization.descriptors.Deserializ
 import org.jetbrains.kotlin.serialization.deserialization.getClassId
 import org.jetbrains.kotlin.serialization.deserialization.getName
 import org.jetbrains.kotlin.storage.StorageManager
+import java.lang.ref.SoftReference
 
-class KlibMetadataPackageFragment(
+class KlibMetadataDeserializedPackageFragment(
     fqName: FqName,
     private val library: KotlinLibrary,
     private val packageAccessHandler: PackageAccessHandler?,
     storageManager: StorageManager,
     module: ModuleDescriptor,
     private val partName: String
+) : KlibMetadataPackageFragment(fqName, storageManager, module) {
+
+    // The proto field is lazy so that we can load only needed
+    // packages from the library.
+    override val protoForNames: ProtoBuf.PackageFragment get() = ensureStorage()
+
+    private var protoForNamesStorage: SoftReference<ProtoBuf.PackageFragment> = SoftReference(null)
+
+    private fun ensureStorage(): ProtoBuf.PackageFragment {
+        var tmp = protoForNamesStorage.get()
+        if (tmp == null) {
+            tmp = (packageAccessHandler ?: SimplePackageAccessHandler).loadPackageFragment(library, fqName.asString(), partName)
+            protoForNamesStorage = SoftReference(tmp)
+        }
+        return tmp
+    }
+
+    override val proto: ProtoBuf.PackageFragment
+        get() {
+            packageAccessHandler?.markNeededForLink(library, fqName.asString())
+            return protoForNames
+        }
+}
+
+class KlibMetadataCachedPackageFragment(
+    byteArray: ByteArray,
+    storageManager: StorageManager,
+    module: ModuleDescriptor,
+    override val protoForNames: ProtoBuf.PackageFragment = parsePackageFragment(byteArray),
+    fqName: FqName = FqName(protoForNames.getExtension(KlibMetadataProtoBuf.fqName))
+) :  KlibMetadataPackageFragment(fqName, storageManager, module)
+
+abstract class KlibMetadataPackageFragment(
+    fqName: FqName,
+    storageManager: StorageManager,
+    module: ModuleDescriptor
 ) : DeserializedPackageFragment(fqName, storageManager, module) {
 
     lateinit var components: DeserializationComponents
@@ -36,15 +73,10 @@ class KlibMetadataPackageFragment(
 
     // The proto field is lazy so that we can load only needed
     // packages from the library.
-    private val protoForNames: ProtoBuf.PackageFragment by lazy {
-        (packageAccessHandler ?: SimplePackageAccessHandler).loadPackageFragment(library, fqName.asString(), partName)
-    }
+    abstract val protoForNames: ProtoBuf.PackageFragment
 
-    val proto: ProtoBuf.PackageFragment
-        get() {
-            packageAccessHandler?.markNeededForLink(library, fqName.asString())
-            return protoForNames
-        }
+    open val proto: ProtoBuf.PackageFragment
+        get() = protoForNames
 
     private val nameResolver by lazy {
         NameResolverImpl(protoForNames.strings, protoForNames.qualifiedNames)

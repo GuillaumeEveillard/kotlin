@@ -101,24 +101,23 @@ class KDocSampleTest : AbstractMultiModuleTest() {
         }
 
         val textData = FileUtil.loadFile(testDataFile, true)
-        val directives = InTextDirectivesUtils.findLinesWithPrefixesRemoved(textData, false, "INFO:")
+        val directives = InTextDirectivesUtils.findLinesWithPrefixesRemoved(textData, false, true, "INFO:")
 
         if (directives.isEmpty()) {
             throw FileComparisonFailure(
-                    "'// INFO:' directive was expected",
-                    textData,
-                    textData + "\n\n//INFO: " + info,
-                    testDataFile.absolutePath)
-        }
-        else {
+                "'// INFO:' directive was expected",
+                textData,
+                textData + "\n\n//INFO: " + info,
+                testDataFile.absolutePath
+            )
+        } else {
             val expectedInfo = directives.joinToString("\n", postfix = "\n")
 
             if (expectedInfo.endsWith("...\n")) {
                 if (!info!!.startsWith(expectedInfo.removeSuffix("...\n"))) {
                     wrapToFileComparisonFailure(info, testDataFile.absolutePath, textData)
                 }
-            }
-            else if (expectedInfo != info) {
+            } else if (expectedInfo != info) {
                 wrapToFileComparisonFailure(info!!, testDataFile.absolutePath, textData)
             }
         }

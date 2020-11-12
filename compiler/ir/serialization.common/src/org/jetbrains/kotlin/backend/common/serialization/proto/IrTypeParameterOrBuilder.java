@@ -17,52 +17,24 @@ public interface IrTypeParameterOrBuilder extends
   org.jetbrains.kotlin.backend.common.serialization.proto.IrDeclarationBase getBase();
 
   /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex name = 2;</code>
+   * <code>required int32 name = 2;</code>
    */
   boolean hasName();
   /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex name = 2;</code>
+   * <code>required int32 name = 2;</code>
    */
-  org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex getName();
+  int getName();
 
   /**
-   * <code>required int32 index = 3;</code>
+   * <code>repeated int32 super_type = 3 [packed = true];</code>
    */
-  boolean hasIndex();
+  java.util.List<java.lang.Integer> getSuperTypeList();
   /**
-   * <code>required int32 index = 3;</code>
-   */
-  int getIndex();
-
-  /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrTypeVariance variance = 4;</code>
-   */
-  boolean hasVariance();
-  /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.IrTypeVariance variance = 4;</code>
-   */
-  org.jetbrains.kotlin.backend.common.serialization.proto.IrTypeVariance getVariance();
-
-  /**
-   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex super_type = 5;</code>
-   */
-  java.util.List<org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex> 
-      getSuperTypeList();
-  /**
-   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex super_type = 5;</code>
-   */
-  org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex getSuperType(int index);
-  /**
-   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex super_type = 5;</code>
+   * <code>repeated int32 super_type = 3 [packed = true];</code>
    */
   int getSuperTypeCount();
-
   /**
-   * <code>required bool is_reified = 6;</code>
+   * <code>repeated int32 super_type = 3 [packed = true];</code>
    */
-  boolean hasIsReified();
-  /**
-   * <code>required bool is_reified = 6;</code>
-   */
-  boolean getIsReified();
+  int getSuperType(int index);
 }

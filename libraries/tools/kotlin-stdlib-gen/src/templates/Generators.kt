@@ -13,7 +13,7 @@ object Generators : TemplateGroupBase() {
     init {
         defaultBuilder {
             specialFor(ArraysOfUnsigned) {
-                since("1.3")
+                sinceAtLeast("1.3")
                 annotation("@ExperimentalUnsignedTypes")
             }
         }
@@ -580,6 +580,12 @@ object Generators : TemplateGroupBase() {
             while *second* list contains elements for which [predicate] yielded `false`.
             """
         }
+        sample(when (family) {
+                CharSequences, Strings -> "samples.text.Strings.partition"
+                ArraysOfObjects, ArraysOfPrimitives -> "samples.collections.Arrays.Transformations.partitionArrayOfPrimitives"
+                Sequences -> "samples.collections.Sequences.Transformations.partition"
+                else -> "samples.collections.Iterables.Operations.partition"
+        })
         sequenceClassification(terminal)
         returns("Pair<List<T>, List<T>>")
         body {
@@ -636,7 +642,7 @@ object Generators : TemplateGroupBase() {
 
             Note that the ${f.viewResult} passed to the [transform] function is ephemeral and is valid only inside that function.
             You should not store it or allow it to escape in some way, unless you made a snapshot of it.
-            Several last ${f.viewResult.pluralize()} may have less ${f.element.pluralize()} than the given [size].
+            Several last ${f.viewResult.pluralize()} may have fewer ${f.element.pluralize()} than the given [size].
 
             Both [size] and [step] must be positive and can be greater than the number of elements in this ${f.collection}.
             @param size the number of elements to take in each window
@@ -655,12 +661,14 @@ object Generators : TemplateGroupBase() {
             checkWindowSizeStep(size, step)
             if (this is RandomAccess && this is List) {
                 val thisSize = this.size
-                val result = ArrayList<R>((thisSize + step - 1) / step)
+                val resultCapacity = thisSize / step + if (thisSize % step == 0) 0 else 1
+                val result = ArrayList<R>(resultCapacity)
                 val window = MovingSubList(this)
                 var index = 0
-                while (index < thisSize) {
-                    window.move(index, (index + size).coerceAtMost(thisSize))
-                    if (!partialWindows && window.size < size) break
+                while (index in 0 until thisSize) {
+                    val windowSize = size.coerceAtMost(thisSize - index)
+                    if (!partialWindows && windowSize < size) break
+                    window.move(index, index + windowSize)
                     result.add(transform(window))
                     index += step
                 }
@@ -681,11 +689,12 @@ object Generators : TemplateGroupBase() {
             """
             checkWindowSizeStep(size, step)
             val thisSize = this.length
-            val result = ArrayList<R>((thisSize + step - 1) / step)
+            val resultCapacity = thisSize / step + if (thisSize % step == 0) 0 else 1
+            val result = ArrayList<R>(resultCapacity)
             var index = 0
-            while (index < thisSize) {
+            while (index in 0 until thisSize) {
                 val end = index + size
-                val coercedEnd = if (end > thisSize) { if (partialWindows) thisSize else break } else end
+                val coercedEnd = if (end < 0 || end > thisSize) { if (partialWindows) thisSize else break } else end
                 result.add(transform(subSequence(index, coercedEnd)))
                 index += step
             }
@@ -715,7 +724,7 @@ object Generators : TemplateGroupBase() {
             sliding along this ${f.collection} with the given [step], where each
             snapshot is ${f.snapshotResult.prefixWithArticle()}.
 
-            Several last ${f.snapshotResult.pluralize()} may have less ${f.element.pluralize()} than the given [size].
+            Several last ${f.snapshotResult.pluralize()} may have fewer ${f.element.pluralize()} than the given [size].
 
             Both [size] and [step] must be positive and can be greater than the number of elements in this ${f.collection}.
             @param size the number of elements to take in each window
@@ -731,9 +740,10 @@ object Generators : TemplateGroupBase() {
             checkWindowSizeStep(size, step)
             if (this is RandomAccess && this is List) {
                 val thisSize = this.size
-                val result = ArrayList<List<T>>((thisSize + step - 1) / step)
+                val resultCapacity = thisSize / step + if (thisSize % step == 0) 0 else 1
+                val result = ArrayList<List<T>>(resultCapacity)
                 var index = 0
-                while (index < thisSize) {
+                while (index in 0 until thisSize) {
                     val windowSize = size.coerceAtMost(thisSize - index)
                     if (windowSize < size && !partialWindows) break
                     result.add(List(windowSize) { this[it + index] })
@@ -768,7 +778,7 @@ object Generators : TemplateGroupBase() {
 
             Note that the ${f.viewResult} passed to the [transform] function is ephemeral and is valid only inside that function.
             You should not store it or allow it to escape in some way, unless you made a snapshot of it.
-            Several last ${f.viewResult.pluralize()} may have less ${f.element.pluralize()} than the given [size].
+            Several last ${f.viewResult.pluralize()} may have fewer ${f.element.pluralize()} than the given [size].
 
             Both [size] and [step] must be positive and can be greater than the number of elements in this ${f.collection}.
             @param size the number of elements to take in each window
@@ -785,7 +795,11 @@ object Generators : TemplateGroupBase() {
             """
             checkWindowSizeStep(size, step)
             val windows = (if (partialWindows) indices else 0 until length - size + 1) step step
-            return windows.asSequence().map { index -> transform(subSequence(index, (index + size).coerceAtMost(length))) }
+            return windows.asSequence().map { index ->
+                val end = index + size
+                val coercedEnd = if (end < 0 || end > length) length else end
+                transform(subSequence(index, coercedEnd))
+            }
             """
         }
     }
@@ -800,7 +814,7 @@ object Generators : TemplateGroupBase() {
             sliding along this ${f.collection} with the given [step], where each
             snapshot is ${f.snapshotResult.prefixWithArticle()}.
 
-            Several last ${f.snapshotResult.pluralize()} may have less ${f.element.pluralize()} than the given [size].
+            Several last ${f.snapshotResult.pluralize()} may have fewer ${f.element.pluralize()} than the given [size].
 
             Both [size] and [step] must be positive and can be greater than the number of elements in this ${f.collection}.
             @param size the number of elements to take in each window
@@ -828,7 +842,7 @@ object Generators : TemplateGroupBase() {
 
             Note that the ${f.viewResult} passed to the [transform] function is ephemeral and is valid only inside that function.
             You should not store it or allow it to escape in some way, unless you made a snapshot of it.
-            The last ${f.viewResult} may have less ${f.element.pluralize()} than the given [size].
+            The last ${f.viewResult} may have fewer ${f.element.pluralize()} than the given [size].
 
             @param size the number of elements to take in each ${f.viewResult}, must be positive and can be greater than the number of elements in this ${f.collection}.
             """
@@ -855,12 +869,13 @@ object Generators : TemplateGroupBase() {
             """
             Splits this ${f.collection} into a ${f.mapResult} of ${f.snapshotResult.pluralize()} each not exceeding the given [size].
 
-            The last ${f.snapshotResult} in the resulting ${f.mapResult} may have less ${f.element.pluralize()} than the given [size].
+            The last ${f.snapshotResult} in the resulting ${f.mapResult} may have fewer ${f.element.pluralize()} than the given [size].
 
             @param size the number of elements to take in each ${f.snapshotResult}, must be positive and can be greater than the number of elements in this ${f.collection}.
             """
         }
-        sample("samples.collections.Collections.Transformations.chunked")
+        specialFor(Iterables, Sequences) { sample("samples.collections.Collections.Transformations.chunked") }
+        specialFor(CharSequences) { sample("samples.text.Strings.chunked") }
         specialFor(Iterables) { returns("List<List<T>>") }
         specialFor(Sequences) { returns("Sequence<List<T>>") }
         specialFor(CharSequences) { returns("List<String>") }
@@ -883,7 +898,7 @@ object Generators : TemplateGroupBase() {
 
             Note that the ${f.viewResult} passed to the [transform] function is ephemeral and is valid only inside that function.
             You should not store it or allow it to escape in some way, unless you made a snapshot of it.
-            The last ${f.viewResult} may have less ${f.element.pluralize()} than the given [size].
+            The last ${f.viewResult} may have fewer ${f.element.pluralize()} than the given [size].
 
             @param size the number of elements to take in each ${f.viewResult}, must be positive and can be greater than the number of elements in this ${f.collection}.
             """
@@ -908,7 +923,7 @@ object Generators : TemplateGroupBase() {
             """
             Splits this ${f.collection} into a sequence of ${f.snapshotResult.pluralize()} each not exceeding the given [size].
 
-            The last ${f.snapshotResult} in the resulting sequence may have less ${f.element.pluralize()} than the given [size].
+            The last ${f.snapshotResult} in the resulting sequence may have fewer ${f.element.pluralize()} than the given [size].
 
             @param size the number of elements to take in each ${f.snapshotResult}, must be positive and can be greater than the number of elements in this ${f.collection}.
             """
@@ -951,7 +966,7 @@ object Generators : TemplateGroupBase() {
         }
         body(CharSequences) {
             """
-            val size = ${if (f == CharSequences) "length" else "size" } - 1
+            val size = ${f.code.size} - 1
             if (size < 1) return emptyList()
             val result = ArrayList<R>(size)
             for (index in 0 until size) {

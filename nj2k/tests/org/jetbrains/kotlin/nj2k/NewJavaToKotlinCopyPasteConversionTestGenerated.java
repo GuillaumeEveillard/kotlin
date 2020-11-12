@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
@@ -8,7 +8,6 @@ package org.jetbrains.kotlin.nj2k;
 import com.intellij.testFramework.TestDataPath;
 import org.jetbrains.kotlin.test.JUnit3RunnerWithInners;
 import org.jetbrains.kotlin.test.KotlinTestUtils;
-import org.jetbrains.kotlin.test.TargetBackend;
 import org.jetbrains.kotlin.test.TestMetadata;
 import org.junit.runner.RunWith;
 
@@ -22,7 +21,7 @@ import java.util.regex.Pattern;
 @RunWith(JUnit3RunnerWithInners.class)
 public class NewJavaToKotlinCopyPasteConversionTestGenerated extends AbstractNewJavaToKotlinCopyPasteConversionTest {
     private void runTest(String testDataFilePath) throws Exception {
-        KotlinTestUtils.runTest(this::doTest, TargetBackend.ANY, testDataFilePath);
+        KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
     }
 
     @TestMetadata("AddImports.java")
@@ -56,7 +55,7 @@ public class NewJavaToKotlinCopyPasteConversionTestGenerated extends AbstractNew
     }
 
     public void testAllFilesPresentInCopyPaste() throws Exception {
-        KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("nj2k/testData/copyPaste"), Pattern.compile("^([^\\.]+)\\.java$"), TargetBackend.ANY, true);
+        KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("nj2k/testData/copyPaste"), Pattern.compile("^([^\\.]+)\\.java$"), null, true);
     }
 
     @TestMetadata("Arithmetic.java")
@@ -82,6 +81,11 @@ public class NewJavaToKotlinCopyPasteConversionTestGenerated extends AbstractNew
     @TestMetadata("ConversionInCorrectContext.java")
     public void testConversionInCorrectContext() throws Exception {
         runTest("nj2k/testData/copyPaste/ConversionInCorrectContext.java");
+    }
+
+    @TestMetadata("ConvertedMethodReference.java")
+    public void testConvertedMethodReference() throws Exception {
+        runTest("nj2k/testData/copyPaste/ConvertedMethodReference.java");
     }
 
     @TestMetadata("CopyAnnotation.java")
@@ -184,6 +188,16 @@ public class NewJavaToKotlinCopyPasteConversionTestGenerated extends AbstractNew
         runTest("nj2k/testData/copyPaste/OnlyQualifier.java");
     }
 
+    @TestMetadata("OpenPublicFunctionToTopLevel.java")
+    public void testOpenPublicFunctionToTopLevel() throws Exception {
+        runTest("nj2k/testData/copyPaste/OpenPublicFunctionToTopLevel.java");
+    }
+
+    @TestMetadata("PrivateFunctionToTopLevel.java")
+    public void testPrivateFunctionToTopLevel() throws Exception {
+        runTest("nj2k/testData/copyPaste/PrivateFunctionToTopLevel.java");
+    }
+
     @TestMetadata("RawTypeRef.java")
     public void testRawTypeRef() throws Exception {
         runTest("nj2k/testData/copyPaste/RawTypeRef.java");
@@ -212,5 +226,10 @@ public class NewJavaToKotlinCopyPasteConversionTestGenerated extends AbstractNew
     @TestMetadata("SingleWordFromIdentifier.java")
     public void testSingleWordFromIdentifier() throws Exception {
         runTest("nj2k/testData/copyPaste/SingleWordFromIdentifier.java");
+    }
+
+    @TestMetadata("UnconvertedMethodReference.java")
+    public void testUnconvertedMethodReference() throws Exception {
+        runTest("nj2k/testData/copyPaste/UnconvertedMethodReference.java");
     }
 }

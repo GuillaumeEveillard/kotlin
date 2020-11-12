@@ -7,8 +7,9 @@ package org.jetbrains.kotlin.ir.backend.js.utils
 
 import org.jetbrains.kotlin.ir.IrElement
 import org.jetbrains.kotlin.ir.declarations.IrConstructor
-import org.jetbrains.kotlin.ir.declarations.IrDeclaration
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationWithName
+import org.jetbrains.kotlin.ir.declarations.IrDeclarationBase
+import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.util.isEffectivelyExternal
 import org.jetbrains.kotlin.ir.util.isPropertyAccessor
 import org.jetbrains.kotlin.ir.util.isPropertyField
@@ -29,14 +30,16 @@ class StableNamesCollector : IrElementVisitorVoid {
         element.acceptChildrenVoid(this)
     }
 
-    override fun visitDeclaration(declaration: IrDeclaration) {
+    override fun visitDeclaration(declaration: IrDeclarationBase) {
         super.visitDeclaration(declaration)
 
         if (declaration !is IrDeclarationWithName)
             return
 
+        val isStatic = declaration.hasStaticDispatch()
+
         val scope =
-            if (declaration.hasStaticDispatch())
+            if (isStatic)
                 staticNames
             else
                 memberNames
@@ -45,13 +48,22 @@ class StableNamesCollector : IrElementVisitorVoid {
             if (declaration.isEffectivelyExternal())
                 stableNameForExternalDeclaration(declaration)
             else
-                stableNameForNonExternalDeclaration(declaration)
+                stableNameForNonExternalDeclaration(declaration, isStatic)
 
         scope.addIfNotNull(stableName)
     }
 
-    private fun stableNameForNonExternalDeclaration(declaration: IrDeclarationWithName): String? =
-        declaration.getJsName()
+    private fun stableNameForNonExternalDeclaration(declaration: IrDeclarationWithName, isStatic: Boolean): String? =
+        declaration.getJsName() ?: run {
+            // TODO: since following code affects local variable naming some weird behaviour of js("..") is possible
+            // Remove check once 1. `js` function is re-designed and re-implemented, 2. JsExport is properly implemented
+            if (!isStatic) {
+                // Make sure property defined on prototype has stable name
+                val simpleFunction = declaration as? IrSimpleFunction
+                val property = simpleFunction?.correspondingPropertySymbol?.owner
+                property?.getJsNameOrKotlinName()?.identifier
+            } else null
+        }
 
     private fun stableNameForExternalDeclaration(declaration: IrDeclarationWithName): String? {
         if (declaration.isPropertyAccessor ||

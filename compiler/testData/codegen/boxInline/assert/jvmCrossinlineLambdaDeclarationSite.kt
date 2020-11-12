@@ -1,6 +1,6 @@
 // TARGET_BACKEND: JVM
-// FILE: inline.kt
 // KOTLIN_CONFIGURATION_FLAGS: ASSERTIONS_MODE=jvm
+// FILE: inline.kt
 // WITH_RUNTIME
 // NO_CHECK_LAMBDA_INLINING
 
@@ -17,7 +17,6 @@ object CrossinlineLambdaContainer {
 }
 
 // FILE: inlineSite.kt
-// KOTLIN_CONFIGURATION_FLAGS: ASSERTIONS_MODE=jvm
 
 import test.CrossinlineLambdaContainer.call
 
@@ -183,8 +182,9 @@ class ShouldBeEnabled : Checker {
 fun setDesiredAssertionStatus(v: Boolean): Checker {
     val loader = Checker::class.java.classLoader
     loader.setDefaultAssertionStatus(false)
-    loader.setPackageAssertionStatus("test", v)
-    val c = loader.loadClass(if (v) "ShouldBeEnabled" else "ShouldBeDisabled")
+    val className = if (v) "ShouldBeEnabled" else "ShouldBeDisabled"
+    loader.setClassAssertionStatus(className, v)
+    val c = loader.loadClass(className)
     return c.newInstance() as Checker
 }
 
@@ -200,14 +200,32 @@ fun box(): String {
     if (c.checkFalseWithMessageFalse()) return "FAIL 31"
 
     c = setDesiredAssertionStatus(true)
-    if (c.checkTrueTrue()) return "FAIL 100"
-    if (c.checkTrueFalse()) return "FAIL 101"
-    if (c.checkTrueWithMessageTrue()) return "FAIL 110"
-    if (c.checkTrueWithMessageFalse()) return "FAIL 111"
-    if (c.checkFalseTrue()) return "FAIL 120"
-    if (c.checkFalseFalse()) return "FAIL 121"
-    if (c.checkFalseWithMessageTrue()) return "FAIL 130"
-    if (c.checkFalseWithMessageFalse()) return "FAIL 131"
+    if (!c.checkTrueTrue()) return "FAIL 100"
+    try {
+        c.checkTrueFalse()
+        return "FAIL 101"
+    } catch (ignore: AssertionError) {}
+    if (!c.checkTrueWithMessageTrue()) return "FAIL 110"
+    try {
+        c.checkTrueWithMessageFalse()
+        return "FAIL 111"
+    } catch (ignore: AssertionError) {}
+    try {
+        c.checkFalseTrue()
+        return "FAIL 120"
+    } catch (ignore: AssertionError) {}
+    try {
+        c.checkFalseFalse()
+        return "FAIL 121"
+    } catch (ignore: AssertionError) {}
+    try {
+        c.checkFalseWithMessageTrue()
+        return "FAIL 130"
+    } catch (ignore: AssertionError) {}
+    try {
+        c.checkFalseWithMessageFalse()
+        return "FAIL 131"
+    } catch (ignore: AssertionError) {}
 
     return "OK"
 }

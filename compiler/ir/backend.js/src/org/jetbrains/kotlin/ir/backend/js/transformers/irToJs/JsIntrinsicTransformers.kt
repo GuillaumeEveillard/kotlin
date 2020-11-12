@@ -19,7 +19,6 @@ import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
 import org.jetbrains.kotlin.ir.symbols.IrSymbol
 import org.jetbrains.kotlin.ir.types.classifierOrFail
 import org.jetbrains.kotlin.ir.util.getInlineClassBackingField
-import org.jetbrains.kotlin.ir.util.getInlinedClass
 import org.jetbrains.kotlin.ir.util.isEffectivelyExternal
 import org.jetbrains.kotlin.js.backend.ast.*
 
@@ -27,6 +26,7 @@ typealias IrCallTransformer = (IrCall, context: JsGenerationContext) -> JsExpres
 
 class JsIntrinsicTransformers(backendContext: JsIrBackendContext) {
     private val transformers: Map<IrSymbol, IrCallTransformer>
+    val icUtils = backendContext.inlineClassesUtils
 
     init {
         val intrinsics = backendContext.intrinsics
@@ -101,6 +101,36 @@ class JsIntrinsicTransformers(backendContext: JsIrBackendContext) {
                 }
             }
 
+            add(intrinsics.jsNewTarget) { _, _ ->
+                JsNameRef(JsName("target"), JsNameRef(JsName("new")))
+            }
+
+            add(intrinsics.jsOpenInitializerBox) { call, context ->
+                val arguments = translateCallArguments(call, context)
+
+                JsInvocation(
+                    JsNameRef("Object.assign"),
+                    arguments
+                )
+            }
+
+            add(intrinsics.jsEmptyObject) { _, _ ->
+                JsObjectLiteral()
+            }
+
+            add(intrinsics.es6DefaultType) { call, context ->
+                val classifier: IrClassifierSymbol = call.getTypeArgument(0)!!.classifierOrFail
+                val owner = classifier.owner
+
+                when {
+                    owner is IrClass && owner.isEffectivelyExternal() ->
+                        context.getRefForExternalClass(owner)
+
+                    else ->
+                        context.getNameForStaticDeclaration(owner as IrDeclarationWithName).makeRef()
+                }
+            }
+
             addIfNotNull(intrinsics.jsCode) { _, _ -> error("Should not be called") }
 
             add(intrinsics.jsGetContinuation) { _, context: JsGenerationContext ->
@@ -157,15 +187,15 @@ class JsIntrinsicTransformers(backendContext: JsIrBackendContext) {
             }
 
             add(intrinsics.jsBoxIntrinsic) { call, context ->
-                val arg = translateCallArguments(call as IrCall, context).single()
-                val inlineClass = call.getTypeArgument(0)!!.getInlinedClass()!!
+                val arg = translateCallArguments(call, context).single()
+                val inlineClass = icUtils.getInlinedClass(call.getTypeArgument(0)!!)!!
                 val constructor = inlineClass.declarations.filterIsInstance<IrConstructor>().single { it.isPrimary }
                 JsNew(context.getNameForConstructor(constructor).makeRef(), listOf(arg))
             }
 
             add(intrinsics.jsUnboxIntrinsic) { call, context ->
                 val arg = translateCallArguments(call, context).single()
-                val inlineClass = call.getTypeArgument(1)!!.getInlinedClass()!!
+                val inlineClass = icUtils.getInlinedClass(call.getTypeArgument(1)!!)!!
                 val field = getInlineClassBackingField(inlineClass)
                 val fieldName = context.getNameForField(field)
                 JsNameRef(fieldName, arg)
@@ -187,6 +217,26 @@ class JsIntrinsicTransformers(backendContext: JsIrBackendContext) {
 
             add(intrinsics.unreachable) { _, _ ->
                 JsInvocation(JsNameRef(Namer.UNREACHABLE_NAME))
+            }
+
+            add(intrinsics.createSharedBox) { call, context: JsGenerationContext ->
+                val arg = translateCallArguments(call, context).single()
+                JsObjectLiteral(listOf(JsPropertyInitializer(JsNameRef(Namer.SHARED_BOX_V), arg)))
+            }
+
+            add(intrinsics.readSharedBox) { call, context: JsGenerationContext ->
+                val box = translateCallArguments(call, context).single()
+                JsNameRef(Namer.SHARED_BOX_V, box)
+            }
+
+            add(intrinsics.writeSharedBox) { call, context: JsGenerationContext ->
+                val args = translateCallArguments(call, context)
+                val box = args[0]
+                val value = args[1]
+                jsAssignment(JsNameRef(Namer.SHARED_BOX_V, box), value)
+            }
+            add(intrinsics.jsUndefined) { _, _ ->
+                JsPrefixOperation(JsUnaryOperator.VOID, JsIntLiteral(1))
             }
         }
     }

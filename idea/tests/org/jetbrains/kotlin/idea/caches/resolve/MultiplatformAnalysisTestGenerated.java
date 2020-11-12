@@ -1,5 +1,5 @@
 /*
- * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
  * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
@@ -8,7 +8,6 @@ package org.jetbrains.kotlin.idea.caches.resolve;
 import com.intellij.testFramework.TestDataPath;
 import org.jetbrains.kotlin.test.JUnit3RunnerWithInners;
 import org.jetbrains.kotlin.test.KotlinTestUtils;
-import org.jetbrains.kotlin.test.TargetBackend;
 import org.jetbrains.kotlin.test.TestMetadata;
 import org.junit.runner.RunWith;
 
@@ -22,7 +21,7 @@ import java.util.regex.Pattern;
 @RunWith(JUnit3RunnerWithInners.class)
 public class MultiplatformAnalysisTestGenerated extends AbstractMultiplatformAnalysisTest {
     private void runTest(String testDataFilePath) throws Exception {
-        KotlinTestUtils.runTest(this::doTest, TargetBackend.ANY, testDataFilePath);
+        KotlinTestUtils.runTest(this::doTest, this, testDataFilePath);
     }
 
     @TestMetadata("aliasesTypeMismatch")
@@ -31,7 +30,7 @@ public class MultiplatformAnalysisTestGenerated extends AbstractMultiplatformAna
     }
 
     public void testAllFilesPresentInMultiplatform() throws Exception {
-        KotlinTestUtils.assertAllTestsPresentByMetadata(this.getClass(), new File("idea/testData/multiplatform"), Pattern.compile("^([^\\.]+)$"), TargetBackend.ANY, false);
+        KotlinTestUtils.assertAllTestsPresentByMetadataWithExcluded(this.getClass(), new File("idea/testData/multiplatform"), Pattern.compile("^([^\\.]+)$"), null, false);
     }
 
     @TestMetadata("callableReferences")
@@ -49,6 +48,21 @@ public class MultiplatformAnalysisTestGenerated extends AbstractMultiplatformAna
         runTest("idea/testData/multiplatform/correctOverloadResolutionAmbiguity/");
     }
 
+    @TestMetadata("diamondActualInBottom")
+    public void testDiamondActualInBottom() throws Exception {
+        runTest("idea/testData/multiplatform/diamondActualInBottom/");
+    }
+
+    @TestMetadata("diamondActualOnOnePath")
+    public void testDiamondActualOnOnePath() throws Exception {
+        runTest("idea/testData/multiplatform/diamondActualOnOnePath/");
+    }
+
+    @TestMetadata("diamondDuplicateActuals")
+    public void testDiamondDuplicateActuals() throws Exception {
+        runTest("idea/testData/multiplatform/diamondDuplicateActuals/");
+    }
+
     @TestMetadata("diamondModuleDependency1")
     public void testDiamondModuleDependency1() throws Exception {
         runTest("idea/testData/multiplatform/diamondModuleDependency1/");
@@ -59,9 +73,64 @@ public class MultiplatformAnalysisTestGenerated extends AbstractMultiplatformAna
         runTest("idea/testData/multiplatform/diamondModuleDependency2/");
     }
 
+    @TestMetadata("diamondSeesTwoActuals")
+    public void testDiamondSeesTwoActuals() throws Exception {
+        runTest("idea/testData/multiplatform/diamondSeesTwoActuals/");
+    }
+
+    @TestMetadata("differentKindsOfDependencies")
+    public void testDifferentKindsOfDependencies() throws Exception {
+        runTest("idea/testData/multiplatform/differentKindsOfDependencies/");
+    }
+
+    @TestMetadata("duplicateActualsExplicit")
+    public void testDuplicateActualsExplicit() throws Exception {
+        runTest("idea/testData/multiplatform/duplicateActualsExplicit/");
+    }
+
+    @TestMetadata("duplicateActualsImplicit")
+    public void testDuplicateActualsImplicit() throws Exception {
+        runTest("idea/testData/multiplatform/duplicateActualsImplicit/");
+    }
+
+    @TestMetadata("duplicateActualsOneWeaklyIncompatible")
+    public void testDuplicateActualsOneWeaklyIncompatible() throws Exception {
+        runTest("idea/testData/multiplatform/duplicateActualsOneWeaklyIncompatible/");
+    }
+
+    @TestMetadata("duplicateActualsOneWithStrongIncompatibility")
+    public void testDuplicateActualsOneWithStrongIncompatibility() throws Exception {
+        runTest("idea/testData/multiplatform/duplicateActualsOneWithStrongIncompatibility/");
+    }
+
+    @TestMetadata("duplicateExpectsExplicit")
+    public void testDuplicateExpectsExplicit() throws Exception {
+        runTest("idea/testData/multiplatform/duplicateExpectsExplicit/");
+    }
+
+    @TestMetadata("duplicateExpectsImplicit")
+    public void testDuplicateExpectsImplicit() throws Exception {
+        runTest("idea/testData/multiplatform/duplicateExpectsImplicit/");
+    }
+
+    @TestMetadata("duplicateExpectsWithStrongIncompatibility")
+    public void testDuplicateExpectsWithStrongIncompatibility() throws Exception {
+        runTest("idea/testData/multiplatform/duplicateExpectsWithStrongIncompatibility/");
+    }
+
     @TestMetadata("extensionOnExpect")
     public void testExtensionOnExpect() throws Exception {
         runTest("idea/testData/multiplatform/extensionOnExpect/");
+    }
+
+    @TestMetadata("hierarcicalActualization")
+    public void testHierarcicalActualization() throws Exception {
+        runTest("idea/testData/multiplatform/hierarcicalActualization/");
+    }
+
+    @TestMetadata("incompleteActualization")
+    public void testIncompleteActualization() throws Exception {
+        runTest("idea/testData/multiplatform/incompleteActualization/");
     }
 
     @TestMetadata("internalFromDependsOn")
@@ -84,6 +153,16 @@ public class MultiplatformAnalysisTestGenerated extends AbstractMultiplatformAna
         runTest("idea/testData/multiplatform/jsNameClash/");
     }
 
+    @TestMetadata("jvmDefaultNonMpp")
+    public void testJvmDefaultNonMpp() throws Exception {
+        runTest("idea/testData/multiplatform/jvmDefaultNonMpp/");
+    }
+
+    @TestMetadata("kt41218")
+    public void testKt41218() throws Exception {
+        runTest("idea/testData/multiplatform/kt41218/");
+    }
+
     @TestMetadata("lambdas")
     public void testLambdas() throws Exception {
         runTest("idea/testData/multiplatform/lambdas/");
@@ -97,6 +176,16 @@ public class MultiplatformAnalysisTestGenerated extends AbstractMultiplatformAna
     @TestMetadata("multilevelParents")
     public void testMultilevelParents() throws Exception {
         runTest("idea/testData/multiplatform/multilevelParents/");
+    }
+
+    @TestMetadata("overrideExpect")
+    public void testOverrideExpect() throws Exception {
+        runTest("idea/testData/multiplatform/overrideExpect/");
+    }
+
+    @TestMetadata("overrideExpectWithCompositeType")
+    public void testOverrideExpectWithCompositeType() throws Exception {
+        runTest("idea/testData/multiplatform/overrideExpectWithCompositeType/");
     }
 
     @TestMetadata("platformSpecificChecksInCommon")
@@ -117,6 +206,11 @@ public class MultiplatformAnalysisTestGenerated extends AbstractMultiplatformAna
     @TestMetadata("simple")
     public void testSimple() throws Exception {
         runTest("idea/testData/multiplatform/simple/");
+    }
+
+    @TestMetadata("smartCastOnPropertyFromDependentModule")
+    public void testSmartCastOnPropertyFromDependentModule() throws Exception {
+        runTest("idea/testData/multiplatform/smartCastOnPropertyFromDependentModule/");
     }
 
     @TestMetadata("supertypes")
@@ -147,5 +241,10 @@ public class MultiplatformAnalysisTestGenerated extends AbstractMultiplatformAna
     @TestMetadata("useCorrectBuiltIns")
     public void testUseCorrectBuiltIns() throws Exception {
         runTest("idea/testData/multiplatform/useCorrectBuiltIns/");
+    }
+
+    @TestMetadata("weaklyIncompatibleActualInIntermediateModule")
+    public void testWeaklyIncompatibleActualInIntermediateModule() throws Exception {
+        runTest("idea/testData/multiplatform/weaklyIncompatibleActualInIntermediateModule/");
     }
 }

@@ -13,7 +13,7 @@ import org.jetbrains.kotlin.js.backend.ast.*
 class IrDeclarationToJsTransformer : BaseIrElementToJsNodeTransformer<JsStatement, JsGenerationContext> {
 
     override fun visitSimpleFunction(declaration: IrSimpleFunction, context: JsGenerationContext): JsStatement {
-        require(!declaration.descriptor.isExpect)
+        require(!declaration.isExpect)
         return declaration.accept(IrFunctionToJsTransformer(), context).makeStmt()
     }
 
@@ -26,6 +26,11 @@ class IrDeclarationToJsTransformer : BaseIrElementToJsNodeTransformer<JsStatemen
             declaration,
             context.newDeclaration()
         ).generate()
+    }
+
+    override fun visitErrorDeclaration(declaration: IrErrorDeclaration, data: JsGenerationContext): JsStatement {
+        // To avoid compiler crash with UnimplementedException just in case I added this visitor to catch uncovered cases
+        return JsSingleLineComment("\$error code: declaration")
     }
 
     override fun visitField(declaration: IrField, context: JsGenerationContext): JsStatement {
@@ -43,5 +48,15 @@ class IrDeclarationToJsTransformer : BaseIrElementToJsNodeTransformer<JsStatemen
 
     override fun visitVariable(declaration: IrVariable, context: JsGenerationContext): JsStatement {
         return declaration.accept(IrElementToJsStatementTransformer(), context)
+    }
+
+    override fun visitScript(irScript: IrScript, context: JsGenerationContext): JsStatement {
+        return JsGlobalBlock().apply {
+            irScript.statements.forEach {
+                statements +=
+                    if (it is IrDeclaration) it.accept(this@IrDeclarationToJsTransformer, context)
+                    else it.accept(IrElementToJsStatementTransformer(), context)
+            }
+        }
     }
 }

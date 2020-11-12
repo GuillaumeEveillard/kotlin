@@ -43,6 +43,10 @@ body.dark {
     text-decoration-color: red;
 }
 
+.dark .subtype-error {
+    color: red;
+}
+
 .dark .error.unsupported {
     text-decoration-color: cyan;
 }
@@ -78,4 +82,24 @@ body.dark {
 .dark .line {
     background-color: #313335;
     border-right: thin solid darkgray;
+}
+
+.dark .error-counter {
+    color: #ff1010;
+    padding-left: 15px;
+}
+
+.dark .implicit-counter {
+    color: aqua;
+    padding-left: 15px;
+}
+
+.dark .unresolved-counter {
+    color: #d42eff;
+    padding-left: 15px;
+}
+
+.dark .diagnostic-hover {
+    background-color: #3a3a3a;
+    color: #dfdfdf;
 }

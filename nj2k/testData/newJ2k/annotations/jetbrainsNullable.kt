@@ -1,8 +1,8 @@
-// !specifyLocalVariableTypeByDefault: true
+// !SPECIFY_LOCAL_VARIABLE_TYPE_BY_DEFAULT: true
 package test
 
 class Test(str: String?) {
-    internal var myStr: String? = "String2"
+    var myStr: String? = "String2"
     fun sout(str: String?) {
         println(str)
     }

@@ -5,11 +5,9 @@
 
 package org.jetbrains.kotlin.idea.script
 
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.extensions.Extensions
 import com.intellij.openapi.module.JavaModuleType
 import com.intellij.openapi.module.Module
-import com.intellij.openapi.projectRoots.ProjectJdkTable
+import com.intellij.openapi.projectRoots.Sdk
 import com.intellij.openapi.roots.ModuleRootModificationUtil
 import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.util.io.FileUtil
@@ -18,24 +16,27 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.testFramework.PlatformTestCase
-import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.testFramework.PsiTestUtil
 import com.intellij.util.ui.UIUtil
+import org.jdom.Element
 import org.jetbrains.kotlin.codegen.forTestCompile.ForTestCompileRuntime
 import org.jetbrains.kotlin.idea.completion.test.KotlinCompletionTestCase
 import org.jetbrains.kotlin.idea.core.script.IdeScriptReportSink
 import org.jetbrains.kotlin.idea.core.script.ScriptConfigurationManager.Companion.updateScriptDependenciesSynchronously
 import org.jetbrains.kotlin.idea.core.script.ScriptDefinitionContributor
 import org.jetbrains.kotlin.idea.core.script.ScriptDefinitionsManager
-import org.jetbrains.kotlin.idea.core.script.isScriptDependenciesUpdaterDisabled
+import org.jetbrains.kotlin.idea.core.script.settings.KotlinScriptingSettings
 import org.jetbrains.kotlin.idea.highlighter.KotlinHighlightingUtil
+import org.jetbrains.kotlin.idea.script.AbstractScriptConfigurationTest.Companion.useDefaultTemplate
 import org.jetbrains.kotlin.idea.test.PluginTestCaseBase
 import org.jetbrains.kotlin.idea.util.application.runWriteAction
+import org.jetbrains.kotlin.idea.util.projectStructure.getModuleDir
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.scripting.definitions.findScriptDefinition
 import org.jetbrains.kotlin.test.KotlinTestUtils
 import org.jetbrains.kotlin.test.MockLibraryUtil
 import org.jetbrains.kotlin.test.TestJdkKind
+import org.jetbrains.kotlin.test.TestMetadata
 import org.jetbrains.kotlin.test.util.addDependency
 import org.jetbrains.kotlin.test.util.projectLibrary
 import org.jetbrains.kotlin.utils.PathUtil
@@ -44,12 +45,10 @@ import org.jetbrains.kotlin.utils.PathUtil.KOTLIN_SCRIPTING_COMMON_JAR
 import org.jetbrains.kotlin.utils.PathUtil.KOTLIN_SCRIPTING_JVM_JAR
 import java.io.File
 import java.util.regex.Pattern
+import kotlin.reflect.full.findAnnotation
 import kotlin.script.dependencies.Environment
 import kotlin.script.experimental.api.ScriptDiagnostic
 
-private val validKeys = setOf("javaHome", "sources", "classpath", "imports", "template-classes-names")
-private const val useDefaultTemplate = "// DEPENDENCIES:"
-private const val templatesSettings = "// TEMPLATES: "
 // some bugs can only be reproduced when some module and script have intersecting library dependencies
 private const val configureConflictingModule = "// CONFLICTING_MODULE"
 
@@ -62,6 +61,24 @@ internal val switches = listOf(
 abstract class AbstractScriptConfigurationTest : KotlinCompletionTestCase() {
     companion object {
         private const val SCRIPT_NAME = "script.kts"
+
+        val validKeys = setOf("javaHome", "sources", "classpath", "imports", "template-classes-names")
+        const val useDefaultTemplate = "// DEPENDENCIES:"
+        const val templatesSettings = "// TEMPLATES: "
+    }
+
+    protected fun testDataFile(fileName: String): File = File(testDataPath, fileName)
+
+    protected fun testDataFile(): File = testDataFile(fileName())
+
+    protected fun testPath(fileName: String = fileName()): String = testDataFile(fileName).toString()
+
+    protected fun testPath(): String = testPath(fileName())
+
+    protected open fun fileName(): String = KotlinTestUtils.getTestDataFileName(this::class.java, this.name) ?: (getTestName(false) + ".kt")
+
+    override fun getTestDataPath(): String {
+        return this::class.findAnnotation<TestMetadata>()?.value ?: super.getTestDataPath()
     }
 
     override fun setUpModule() {
@@ -77,16 +94,19 @@ abstract class AbstractScriptConfigurationTest : KotlinCompletionTestCase() {
     }
 
     private val sdk by lazy {
-        val jdk = PluginTestCaseBase.jdk(TestJdkKind.MOCK_JDK)
         runWriteAction {
-            ProjectJdkTable.getInstance().addJdk(jdk, testRootDisposable)
-            ProjectRootManager.getInstance(project).projectSdk = jdk
+            val sdk = PluginTestCaseBase.addJdk(testRootDisposable) { PluginTestCaseBase.jdk(TestJdkKind.MOCK_JDK) }
+            ProjectRootManager.getInstance(project).projectSdk = sdk
+            sdk
         }
-        jdk
     }
 
-    protected fun configureScriptFile(path: String) {
+    protected fun configureScriptFile(path: String): VirtualFile {
         val mainScriptFile = findMainScript(path)
+        return configureScriptFile(path, mainScriptFile)
+    }
+
+    protected fun configureScriptFile(path: String, mainScriptFile: File): VirtualFile {
         val environment = createScriptEnvironment(mainScriptFile)
         registerScriptTemplateProvider(environment)
 
@@ -94,13 +114,23 @@ abstract class AbstractScriptConfigurationTest : KotlinCompletionTestCase() {
             myModule = createTestModuleFromDir(it)
         }
 
-        File(path).listFiles { file -> file.name.startsWith("module") }.filter { it.exists() }.forEach {
-            val newModule = createTestModuleFromDir(it)
-            assert(myModule != null) { "Main module should exists" }
-            ModuleRootModificationUtil.addDependency(myModule, newModule)
+        File(path)
+            .listFiles { file -> file.name.startsWith("module") }
+            ?.filter { it.exists() }
+            ?.forEach {
+                val newModule = createTestModuleFromDir(it)
+                assert(myModule != null) { "Main module should exists" }
+                ModuleRootModificationUtil.addDependency(myModule, newModule)
+            }
+
+        File(path).listFiles { file ->
+            file.name.startsWith("script") && file.name != SCRIPT_NAME
+        }?.forEach {
+            createFileAndSyncDependencies(it)
         }
 
-        if (module != null) {
+        // If script is inside module
+        if (module != null && mainScriptFile.parentFile.name.toLowerCase().contains("module")) {
             module.addDependency(
                 projectLibrary(
                     "script-runtime",
@@ -133,30 +163,47 @@ abstract class AbstractScriptConfigurationTest : KotlinCompletionTestCase() {
             }
         }
 
-        createFileAndSyncDependencies(mainScriptFile)
+        return createFileAndSyncDependencies(mainScriptFile)
     }
 
     private val oldScripClasspath: String? = System.getProperty("kotlin.script.classpath")
 
+    private var settings: Element? = null
+
     override fun setUp() {
         super.setUp()
-        ApplicationManager.getApplication().isScriptDependenciesUpdaterDisabled = true
+
+        settings = KotlinScriptingSettings.getInstance(project).state
+
+        ScriptDefinitionsManager.getInstance(project).getAllDefinitions().forEach {
+            KotlinScriptingSettings.getInstance(project).setEnabled(it, false)
+        }
+
+        setUpTestProject()
+    }
+
+    open fun setUpTestProject() {
+
     }
 
     override fun tearDown() {
-        ApplicationManager.getApplication().isScriptDependenciesUpdaterDisabled = false
-
         System.setProperty("kotlin.script.classpath", oldScripClasspath ?: "")
 
+        settings?.let {
+            KotlinScriptingSettings.getInstance(project).loadState(it)
+        }
+
         super.tearDown()
+    }
+
+    override fun getTestProjectJdk(): Sdk {
+        return PluginTestCaseBase.mockJdk()
     }
 
     private fun createTestModuleByName(name: String): Module {
         val newModuleDir = runWriteAction { VfsUtil.createDirectoryIfMissing(project.baseDir, name) }
         val newModule = createModuleAt(name, project, JavaModuleType.getModuleType(), newModuleDir.path)
 
-        // Return type was changed, but it's not used. BUNCH: 183
-        @Suppress("MissingRecentApi")
         PsiTestUtil.addSourceContentToRoots(newModule, newModuleDir)
         return newModule
     }
@@ -199,16 +246,15 @@ abstract class AbstractScriptConfigurationTest : KotlinCompletionTestCase() {
             env["template-classes-names"] = listOf("custom.scriptDefinition.Template")
         }
 
-        if (env["javaHome"] != null) {
-            val jdkKind = when ((env["javaHome"] as? List<String>)?.singleOrNull()) {
-                "9" -> TestJdkKind.FULL_JDK_9
-                else -> TestJdkKind.MOCK_JDK
+        val jdkKind = when ((env["javaHome"] as? List<String>)?.singleOrNull()) {
+            "9" -> TestJdkKind.FULL_JDK_9
+            else -> TestJdkKind.MOCK_JDK
+        }
+        runWriteAction {
+            val jdk = PluginTestCaseBase.addJdk(testRootDisposable) {
+                PluginTestCaseBase.jdk(jdkKind)
             }
-            runWriteAction {
-                val jdk = PluginTestCaseBase.jdk(jdkKind)
-                ProjectJdkTable.getInstance().addJdk(jdk, testRootDisposable)
-                env["javaHome"] = File(jdk.homePath)
-            }
+            env["javaHome"] = File(jdk.homePath)
         }
 
         env.putAll(defaultEnvironment)
@@ -230,11 +276,20 @@ abstract class AbstractScriptConfigurationTest : KotlinCompletionTestCase() {
 
         val libClasses = libSrcDir?.let { compileLibToDir(it) }
 
+        var moduleSrcDir = File("${path}depModule").takeIf { it.isDirectory }
+        val moduleClasses = moduleSrcDir?.let { compileLibToDir(it) }
+        if (moduleSrcDir != null) {
+            val depModule = createTestModuleFromDir(moduleSrcDir)
+            moduleSrcDir = File(depModule.getModuleDir())
+        }
+
         return mapOf(
             "runtime-classes" to ForTestCompileRuntime.runtimeJarForTests(),
             "runtime-source" to File("libraries/stdlib/src"),
             "lib-classes" to libClasses,
             "lib-source" to libSrcDir,
+            "module-classes" to moduleClasses,
+            "module-source" to moduleSrcDir,
             "template-classes" to templateOutDir
         )
     }
@@ -249,7 +304,7 @@ abstract class AbstractScriptConfigurationTest : KotlinCompletionTestCase() {
         }
     }
 
-    private fun createFileAndSyncDependencies(scriptFile: File) {
+    protected fun createFileAndSyncDependencies(scriptFile: File): VirtualFile {
         var script: VirtualFile? = null
         if (module != null) {
             script = module.moduleFile?.parent?.findChild(scriptFile.name)
@@ -264,19 +319,27 @@ abstract class AbstractScriptConfigurationTest : KotlinCompletionTestCase() {
         if (script == null) error("Test file with script couldn't be found in test project")
 
         configureByExistingFile(script)
-        updateScriptDependenciesSynchronously(myFile, project)
+        loadScriptConfigurationSynchronously(script)
+        return script!!
+    }
 
-        VfsUtil.markDirtyAndRefresh(false, true, true, project.baseDir)
+    protected open fun loadScriptConfigurationSynchronously(script: VirtualFile) {
+        updateScriptDependenciesSynchronously(myFile)
+
         // This is needed because updateScriptDependencies invalidates psiFile that was stored in myFile field
+        VfsUtil.markDirtyAndRefresh(false, true, true, project.baseDir)
         myFile = psiManager.findFile(script)
 
-        val ktFile = myFile as KtFile
-        val reports = IdeScriptReportSink.getReports(ktFile)
+        checkHighlighting()
+    }
+
+    protected fun checkHighlighting(file: KtFile = myFile as KtFile) {
+        val reports = IdeScriptReportSink.getReports(file)
         val isFatalErrorPresent = reports.any { it.severity == ScriptDiagnostic.Severity.FATAL }
-        assert(isFatalErrorPresent || KotlinHighlightingUtil.shouldHighlight(myFile)) {
-            "Highlighting is switched off for ${myFile.virtualFile.path}\n" +
+        assert(isFatalErrorPresent || KotlinHighlightingUtil.shouldHighlight(file)) {
+            "Highlighting is switched off for ${file.virtualFile.path}\n" +
                     "reports=$reports\n" +
-                    "scriptDefinition=${ktFile.findScriptDefinition()}"
+                    "scriptDefinition=${file.findScriptDefinition()}"
         }
     }
 
@@ -284,18 +347,18 @@ abstract class AbstractScriptConfigurationTest : KotlinCompletionTestCase() {
         //TODO: tmpDir would be enough, but there is tricky fail under AS otherwise
         val outDir = KotlinTestUtils.tmpDirForReusableFolder("${getTestName(false)}${srcDir.name}Out")
 
-        val kotlinSourceFiles = FileUtil.findFilesByMask(Pattern.compile(".+\\.kt$"), srcDir)
-        if (kotlinSourceFiles.isNotEmpty()) {
-            MockLibraryUtil.compileKotlin(srcDir.path, outDir, extraClasspath = *classpath)
-        }
-
         val javaSourceFiles = FileUtil.findFilesByMask(Pattern.compile(".+\\.java$"), srcDir)
         if (javaSourceFiles.isNotEmpty()) {
             KotlinTestUtils.compileJavaFiles(
                 javaSourceFiles,
-                listOf("-cp", StringUtil.join(listOf(*classpath, outDir), File.pathSeparator), "-d", outDir.path)
+                listOf("-cp", StringUtil.join(listOf(*classpath), File.pathSeparator), "-d", outDir.path)
             )
         }
+        val kotlinSourceFiles = FileUtil.findFilesByMask(Pattern.compile(".+\\.kt$"), srcDir)
+        if (kotlinSourceFiles.isNotEmpty()) {
+            MockLibraryUtil.compileKotlin(srcDir.path, outDir, extraClasspath = *arrayOf(*classpath, outDir.path))
+        }
+
         return outDir
     }
 
@@ -306,9 +369,9 @@ abstract class AbstractScriptConfigurationTest : KotlinCompletionTestCase() {
             CustomScriptTemplateProvider(environment)
         }
 
-        PlatformTestUtil.registerExtension(
-            Extensions.getArea(project),
+        addExtensionPointInTest(
             ScriptDefinitionContributor.EP_NAME,
+            project,
             provider,
             testRootDisposable
         )

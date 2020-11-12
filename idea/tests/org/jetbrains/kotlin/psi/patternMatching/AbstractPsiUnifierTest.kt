@@ -17,7 +17,7 @@ import org.jetbrains.kotlin.test.KotlinTestUtils
 import java.io.File
 
 abstract class AbstractPsiUnifierTest : KotlinLightCodeInsightFixtureTestCase() {
-    fun doTest(filePath: String) {
+    fun doTest(unused: String) {
         fun findPattern(file: KtFile): KtElement {
             val selectionModel = myFixture.editor.selectionModel
             val start = selectionModel.selectionStart
@@ -29,18 +29,14 @@ abstract class AbstractPsiUnifierTest : KotlinLightCodeInsightFixtureTestCase() 
             } as KtElement
         }
 
-        myFixture.configureByFile(filePath)
-        val file = myFixture.file as KtFile
+        val file = myFixture.configureByFile(fileName()) as KtFile
 
         DirectiveBasedActionUtils.checkForUnexpectedErrors(file)
 
         val actualText =
-                findPattern(file)
-                        .toRange()
-                        .match(file, KotlinPsiUnifier.DEFAULT)
-                        .map { it.range.getTextRange().substring(file.getText()!!) }
-                        .joinToString("\n\n")
-        KotlinTestUtils.assertEqualsToFile(File("$filePath.match"), actualText)
+            findPattern(file).toRange().match(file, KotlinPsiUnifier.DEFAULT).map { it.range.getTextRange().substring(file.getText()!!) }
+                .joinToString("\n\n")
+        KotlinTestUtils.assertEqualsToFile(File(testDataPath, "${fileName()}.match"), actualText)
     }
 
     override fun getProjectDescriptor(): LightProjectDescriptor = getProjectDescriptorFromTestName()

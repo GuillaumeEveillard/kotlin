@@ -12,6 +12,7 @@ import org.jetbrains.kotlin.idea.refactoring.selectElement
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.test.KotlinTestUtils
 
+@Suppress("DEPRECATION")
 abstract class AbstractExpressionSelectionTest : LightCodeInsightTestCase() {
     override fun getTestDataPath() = ""
 
@@ -20,16 +21,11 @@ abstract class AbstractExpressionSelectionTest : LightCodeInsightTestCase() {
         val expectedExpression = KotlinTestUtils.getLastCommentInFile(getFile() as KtFile)
 
         try {
-            selectElement(
-                    getEditor(),
-                    getFile() as KtFile,
-                    listOf(CodeInsightUtils.ElementKind.EXPRESSION)
-            ) {
+            selectElement(getEditor(), getFile() as KtFile, listOf(CodeInsightUtils.ElementKind.EXPRESSION)) {
                 assertNotNull("Selected expression mustn't be null", it)
                 assertEquals(expectedExpression, it?.text)
             }
-        }
-        catch (e: IntroduceRefactoringException) {
+        } catch (e: IntroduceRefactoringException) {
             assertEquals(expectedExpression, "")
         }
     }

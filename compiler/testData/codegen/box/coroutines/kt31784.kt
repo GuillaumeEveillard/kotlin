@@ -1,7 +1,7 @@
 // !LANGUAGE: +NewInference
 // WITH_RUNTIME
 
-@file:UseExperimental(ExperimentalTypeInference::class)
+@file:OptIn(ExperimentalTypeInference::class)
 
 package test
 

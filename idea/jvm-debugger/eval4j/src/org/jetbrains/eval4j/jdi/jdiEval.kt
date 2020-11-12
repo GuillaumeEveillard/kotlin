@@ -1,17 +1,6 @@
 /*
- * Copyright 2010-2015 JetBrains s.r.o.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright 2010-2019 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
 package org.jetbrains.eval4j.jdi
@@ -31,10 +20,10 @@ private val CLASS = Type.getType(Class::class.java)
 private val OBJECT = Type.getType(Any::class.java)
 private val BOOTSTRAP_CLASS_DESCRIPTORS = setOf("Ljava/lang/String;", "Ljava/lang/ClassLoader;", "Ljava/lang/Class;")
 
-class JDIEval(
+open class JDIEval(
     private val vm: VirtualMachine,
     private val defaultClassLoader: ClassLoaderReference?,
-    private val thread: ThreadReference,
+    protected val thread: ThreadReference,
     private val invokePolicy: Int
 ) : Eval {
 
@@ -184,9 +173,8 @@ class JDIEval(
     }
 
     private fun findField(fieldDesc: FieldDescription, receiver: ReferenceType? = null): Field {
-        for (owner in listOfNotNull(receiver, fieldDesc.ownerType.asReferenceType())) {
-            owner.fieldByName(fieldDesc.name)?.let { return it }
-        }
+        receiver?.fieldByName(fieldDesc.name)?.let { return it }
+        fieldDesc.ownerType.asReferenceType().fieldByName(fieldDesc.name)?.let { return it }
 
         throwBrokenCodeException(NoSuchFieldError("Field not found: $fieldDesc"))
     }
@@ -268,6 +256,14 @@ class JDIEval(
         return null
     }
 
+    open fun jdiInvokeStaticMethod(type: ClassType, method: Method, args: List<jdi_Value?>, invokePolicy: Int): jdi_Value? {
+        return type.invokeMethod(thread, method, args, invokePolicy)
+    }
+
+    open fun jdiInvokeStaticMethod(type: InterfaceType, method: Method, args: List<jdi_Value?>, invokePolicy: Int): jdi_Value? {
+        return type.invokeMethod(thread, method, args, invokePolicy)
+    }
+
     override fun invokeStaticMethod(methodDesc: MethodDescription, arguments: List<Value>): Value {
         val method = findMethod(methodDesc)
         if (!method.isStatic) {
@@ -284,14 +280,14 @@ class JDIEval(
 
         val result = mayThrow {
             when (declaringType) {
-                is ClassType -> declaringType.invokeMethod(thread, method, args, invokePolicy)
+                is ClassType -> jdiInvokeStaticMethod(declaringType, method, args, invokePolicy)
                 is InterfaceType -> {
                     if (!isJava8OrLater) {
                         val message = "Calling interface static methods is not supported in JVM ${vm.version()} ($method)"
                         throwBrokenCodeException(NoSuchMethodError(message))
                     }
 
-                    declaringType.invokeMethod(thread, method, args, invokePolicy)
+                    jdiInvokeStaticMethod(declaringType, method, args, invokePolicy)
                 }
                 else -> {
                     val message = "Calling static methods is only supported for classes and interfaces ($method)"
@@ -344,6 +340,10 @@ class JDIEval(
         return invokeMethod(boxedValue, method, listOf(), true)
     }
 
+    open fun jdiInvokeMethod(obj: ObjectReference, method: Method, args: List<jdi_Value?>, policy: Int): jdi_Value? {
+        return obj.invokeMethod(thread, method, args, policy)
+    }
+
     override fun invokeMethod(instance: Value, methodDesc: MethodDescription, arguments: List<Value>, invokespecial: Boolean): Value {
         if (invokespecial && methodDesc.name == "<init>") {
             // Constructor call
@@ -365,7 +365,7 @@ class JDIEval(
             }
 
             args.disableCollection()
-            val result = mayThrow { obj.invokeMethod(thread, method, args, policy) }.ifFail(method, obj)
+            val result = mayThrow { jdiInvokeMethod(obj, method, args, policy) }.ifFail(method, obj)
             args.enableCollection()
             return result.asValue()
         }
@@ -432,10 +432,13 @@ class JDIEval(
             listOf(instance, mirrorOfArgs(args))
         )
 
-        if (methodDesc.returnType.sort != Type.OBJECT && methodDesc.returnType.sort != Type.ARRAY && methodDesc.returnType.sort != Type.VOID) {
-            return unboxType(invocationResult, methodDesc.returnType)
-        }
-        return invocationResult
+        return if (methodDesc.returnType.sort != Type.OBJECT &&
+            methodDesc.returnType.sort != Type.ARRAY &&
+            methodDesc.returnType.sort != Type.VOID
+        )
+            unboxType(invocationResult, methodDesc.returnType)
+        else
+            invocationResult
     }
 
     private fun mirrorOfArgs(args: List<jdi_Value?>): Value {

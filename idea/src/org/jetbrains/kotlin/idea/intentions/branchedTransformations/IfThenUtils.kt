@@ -5,8 +5,9 @@
 
 package org.jetbrains.kotlin.idea.intentions.branchedTransformations
 
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.TransactionGuard
 import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.search.LocalSearchScope
 import com.intellij.psi.search.searches.ReferencesSearch
@@ -22,7 +23,7 @@ import org.jetbrains.kotlin.idea.intentions.replaceFirstReceiver
 import org.jetbrains.kotlin.idea.refactoring.inline.KotlinInlineValHandler
 import org.jetbrains.kotlin.idea.refactoring.introduce.introduceVariable.KotlinIntroduceVariableHandler
 import org.jetbrains.kotlin.idea.references.mainReference
-import org.jetbrains.kotlin.idea.resolve.frontendService
+import org.jetbrains.kotlin.idea.resolve.getDataFlowValueFactory
 import org.jetbrains.kotlin.idea.util.getResolutionScope
 import org.jetbrains.kotlin.idea.util.textRangeIn
 import org.jetbrains.kotlin.incremental.components.NoLookupLocation
@@ -38,7 +39,6 @@ import org.jetbrains.kotlin.resolve.calls.callUtil.getType
 import org.jetbrains.kotlin.resolve.calls.resolvedCallUtil.getExplicitReceiverValue
 import org.jetbrains.kotlin.resolve.calls.resolvedCallUtil.getImplicitReceiverValue
 import org.jetbrains.kotlin.resolve.calls.smartcasts.DataFlowValue
-import org.jetbrains.kotlin.resolve.calls.smartcasts.DataFlowValueFactory
 import org.jetbrains.kotlin.resolve.scopes.receivers.ImplicitReceiver
 import org.jetbrains.kotlin.resolve.scopes.utils.findVariable
 import org.jetbrains.kotlin.types.TypeUtils
@@ -138,7 +138,7 @@ fun KtIfExpression.introduceValueForCondition(occurrenceInThenClause: KtExpressi
     )
 }
 
-fun KtNameReferenceExpression.inlineIfDeclaredLocallyAndOnlyUsedOnceWithPrompt(editor: Editor?) {
+fun KtNameReferenceExpression.inlineIfDeclaredLocallyAndOnlyUsedOnce(editor: Editor?, withPrompt: Boolean) {
     val declaration = this.mainReference.resolve() as? KtProperty ?: return
 
     val enclosingElement = KtPsiUtil.getEnclosingElementForLocalDeclaration(declaration)
@@ -149,20 +149,31 @@ fun KtNameReferenceExpression.inlineIfDeclaredLocallyAndOnlyUsedOnceWithPrompt(e
 
     val references = ReferencesSearch.search(declaration, scope).findAll()
     if (references.size == 1) {
-        KotlinInlineValHandler().inlineElement(this.project, editor, declaration)
+        if (!ApplicationManager.getApplication().isUnitTestMode) {
+            ApplicationManager.getApplication().invokeLater {
+                val handler = KotlinInlineValHandler(withPrompt)
+                if (declaration.isValid && handler.canInlineElement(declaration)) {
+                    TransactionGuard.getInstance().submitTransactionAndWait {
+                        handler.inlineElement(this.project, editor, declaration)
+                    }
+                }
+            }
+        } else {
+            KotlinInlineValHandler(withPrompt).inlineElement(this.project, editor, declaration)
+        }
     }
 }
 
-fun KtSafeQualifiedExpression.inlineReceiverIfApplicableWithPrompt(editor: Editor?) {
-    (this.receiverExpression as? KtNameReferenceExpression)?.inlineIfDeclaredLocallyAndOnlyUsedOnceWithPrompt(editor)
+fun KtSafeQualifiedExpression.inlineReceiverIfApplicable(editor: Editor?, withPrompt: Boolean) {
+    (this.receiverExpression as? KtNameReferenceExpression)?.inlineIfDeclaredLocallyAndOnlyUsedOnce(editor, withPrompt)
 }
 
-fun KtBinaryExpression.inlineLeftSideIfApplicableWithPrompt(editor: Editor?) {
-    (this.left as? KtNameReferenceExpression)?.inlineIfDeclaredLocallyAndOnlyUsedOnceWithPrompt(editor)
+fun KtBinaryExpression.inlineLeftSideIfApplicable(editor: Editor?, withPrompt: Boolean) {
+    (this.left as? KtNameReferenceExpression)?.inlineIfDeclaredLocallyAndOnlyUsedOnce(editor, withPrompt)
 }
 
-fun KtPostfixExpression.inlineBaseExpressionIfApplicableWithPrompt(editor: Editor?) {
-    (this.baseExpression as? KtNameReferenceExpression)?.inlineIfDeclaredLocallyAndOnlyUsedOnceWithPrompt(editor)
+fun KtPostfixExpression.inlineBaseExpressionIfApplicable(editor: Editor?, withPrompt: Boolean) {
+    (this.baseExpression as? KtNameReferenceExpression)?.inlineIfDeclaredLocallyAndOnlyUsedOnce(editor, withPrompt)
 }
 
 // I.e. stable val/var/receiver
@@ -182,7 +193,7 @@ fun elvisPattern(newLine: Boolean): String = if (newLine) "$0\n?: $1" else "$0 ?
 
 private fun KtExpression.toDataFlowValue(context: BindingContext): DataFlowValue? {
     val expressionType = this.getType(context) ?: return null
-    val dataFlowValueFactory = this.getResolutionFacade().frontendService<DataFlowValueFactory>()
+    val dataFlowValueFactory = this.getResolutionFacade().getDataFlowValueFactory()
     return dataFlowValueFactory.createDataFlowValue(this, expressionType, context, findModuleDescriptor())
 }
 
@@ -347,14 +358,5 @@ private fun KtExpression.insertSafeCalls(factory: KtPsiFactory): KtExpression {
     replaced.receiverExpression.let { it.replace(it.insertSafeCalls(factory)) }
     return replaced
 }
-
-// Returns -1 if cannot obtain a document
-internal fun KtExpression.lineCount(): Int {
-    val file = containingFile?.virtualFile ?: return -1
-    val document = FileDocumentManager.getInstance().getDocument(file) ?: return -1
-    return document.getLineNumber(textRange.endOffset) - document.getLineNumber(textRange.startOffset) + 1
-}
-
-internal fun KtExpression.isOneLiner(): Boolean = lineCount() == 1
 
 internal fun KtExpression.isElseIf() = parent.node.elementType == KtNodeTypes.ELSE

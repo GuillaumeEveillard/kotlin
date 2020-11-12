@@ -37,7 +37,7 @@ public final class IrFunction extends
         org.jetbrains.kotlin.protobuf.ByteString.newOutput();
     org.jetbrains.kotlin.protobuf.CodedOutputStream unknownFieldsCodedOutput =
         org.jetbrains.kotlin.protobuf.CodedOutputStream.newInstance(
-            unknownFieldsOutput);
+            unknownFieldsOutput, 1);
     try {
       boolean done = false;
       while (!done) {
@@ -67,33 +67,24 @@ public final class IrFunction extends
             break;
           }
           case 16: {
-            int rawValue = input.readEnum();
-            org.jetbrains.kotlin.backend.common.serialization.proto.ModalityKind value = org.jetbrains.kotlin.backend.common.serialization.proto.ModalityKind.valueOf(rawValue);
-            if (value == null) {
-              unknownFieldsCodedOutput.writeRawVarint32(tag);
-              unknownFieldsCodedOutput.writeRawVarint32(rawValue);
-            } else {
-              bitField0_ |= 0x00000002;
-              modality_ = value;
+            if (!((mutable_bitField0_ & 0x00000002) == 0x00000002)) {
+              overridden_ = new java.util.ArrayList<java.lang.Long>();
+              mutable_bitField0_ |= 0x00000002;
             }
+            overridden_.add(input.readInt64());
             break;
           }
-          case 24: {
-            bitField0_ |= 0x00000004;
-            isTailrec_ = input.readBool();
-            break;
-          }
-          case 32: {
-            bitField0_ |= 0x00000008;
-            isSuspend_ = input.readBool();
-            break;
-          }
-          case 42: {
-            if (!((mutable_bitField0_ & 0x00000010) == 0x00000010)) {
-              overridden_ = new java.util.ArrayList<org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex>();
-              mutable_bitField0_ |= 0x00000010;
+          case 18: {
+            int length = input.readRawVarint32();
+            int limit = input.pushLimit(length);
+            if (!((mutable_bitField0_ & 0x00000002) == 0x00000002) && input.getBytesUntilLimit() > 0) {
+              overridden_ = new java.util.ArrayList<java.lang.Long>();
+              mutable_bitField0_ |= 0x00000002;
             }
-            overridden_.add(input.readMessage(org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.PARSER, extensionRegistry));
+            while (input.getBytesUntilLimit() > 0) {
+              overridden_.add(input.readInt64());
+            }
+            input.popLimit(limit);
             break;
           }
         }
@@ -104,7 +95,7 @@ public final class IrFunction extends
       throw new org.jetbrains.kotlin.protobuf.InvalidProtocolBufferException(
           e.getMessage()).setUnfinishedMessage(this);
     } finally {
-      if (((mutable_bitField0_ & 0x00000010) == 0x00000010)) {
+      if (((mutable_bitField0_ & 0x00000002) == 0x00000002)) {
         overridden_ = java.util.Collections.unmodifiableList(overridden_);
       }
       try {
@@ -148,111 +139,43 @@ public final class IrFunction extends
     return base_;
   }
 
-  public static final int MODALITY_FIELD_NUMBER = 2;
-  private org.jetbrains.kotlin.backend.common.serialization.proto.ModalityKind modality_;
+  public static final int OVERRIDDEN_FIELD_NUMBER = 2;
+  private java.util.List<java.lang.Long> overridden_;
   /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.ModalityKind modality = 2;</code>
-   */
-  public boolean hasModality() {
-    return ((bitField0_ & 0x00000002) == 0x00000002);
-  }
-  /**
-   * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.ModalityKind modality = 2;</code>
-   */
-  public org.jetbrains.kotlin.backend.common.serialization.proto.ModalityKind getModality() {
-    return modality_;
-  }
-
-  public static final int IS_TAILREC_FIELD_NUMBER = 3;
-  private boolean isTailrec_;
-  /**
-   * <code>required bool is_tailrec = 3;</code>
-   */
-  public boolean hasIsTailrec() {
-    return ((bitField0_ & 0x00000004) == 0x00000004);
-  }
-  /**
-   * <code>required bool is_tailrec = 3;</code>
-   */
-  public boolean getIsTailrec() {
-    return isTailrec_;
-  }
-
-  public static final int IS_SUSPEND_FIELD_NUMBER = 4;
-  private boolean isSuspend_;
-  /**
-   * <code>required bool is_suspend = 4;</code>
-   */
-  public boolean hasIsSuspend() {
-    return ((bitField0_ & 0x00000008) == 0x00000008);
-  }
-  /**
-   * <code>required bool is_suspend = 4;</code>
-   */
-  public boolean getIsSuspend() {
-    return isSuspend_;
-  }
-
-  public static final int OVERRIDDEN_FIELD_NUMBER = 5;
-  private java.util.List<org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex> overridden_;
-  /**
-   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex overridden = 5;</code>
+   * <code>repeated int64 overridden = 2 [packed = true];</code>
    *
    * <pre>
-   *optional UniqId corresponding_property = 7;
+   * TODO: supposed to be deleted
    * </pre>
    */
-  public java.util.List<org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex> getOverriddenList() {
+  public java.util.List<java.lang.Long>
+      getOverriddenList() {
     return overridden_;
   }
   /**
-   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex overridden = 5;</code>
+   * <code>repeated int64 overridden = 2 [packed = true];</code>
    *
    * <pre>
-   *optional UniqId corresponding_property = 7;
-   * </pre>
-   */
-  public java.util.List<? extends org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndexOrBuilder> 
-      getOverriddenOrBuilderList() {
-    return overridden_;
-  }
-  /**
-   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex overridden = 5;</code>
-   *
-   * <pre>
-   *optional UniqId corresponding_property = 7;
+   * TODO: supposed to be deleted
    * </pre>
    */
   public int getOverriddenCount() {
     return overridden_.size();
   }
   /**
-   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex overridden = 5;</code>
+   * <code>repeated int64 overridden = 2 [packed = true];</code>
    *
    * <pre>
-   *optional UniqId corresponding_property = 7;
+   * TODO: supposed to be deleted
    * </pre>
    */
-  public org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex getOverridden(int index) {
+  public long getOverridden(int index) {
     return overridden_.get(index);
   }
-  /**
-   * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex overridden = 5;</code>
-   *
-   * <pre>
-   *optional UniqId corresponding_property = 7;
-   * </pre>
-   */
-  public org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndexOrBuilder getOverriddenOrBuilder(
-      int index) {
-    return overridden_.get(index);
-  }
+  private int overriddenMemoizedSerializedSize = -1;
 
   private void initFields() {
     base_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrFunctionBase.getDefaultInstance();
-    modality_ = org.jetbrains.kotlin.backend.common.serialization.proto.ModalityKind.FINAL_MODALITY;
-    isTailrec_ = false;
-    isSuspend_ = false;
     overridden_ = java.util.Collections.emptyList();
   }
   private byte memoizedIsInitialized = -1;
@@ -265,27 +188,9 @@ public final class IrFunction extends
       memoizedIsInitialized = 0;
       return false;
     }
-    if (!hasModality()) {
-      memoizedIsInitialized = 0;
-      return false;
-    }
-    if (!hasIsTailrec()) {
-      memoizedIsInitialized = 0;
-      return false;
-    }
-    if (!hasIsSuspend()) {
-      memoizedIsInitialized = 0;
-      return false;
-    }
     if (!getBase().isInitialized()) {
       memoizedIsInitialized = 0;
       return false;
-    }
-    for (int i = 0; i < getOverriddenCount(); i++) {
-      if (!getOverridden(i).isInitialized()) {
-        memoizedIsInitialized = 0;
-        return false;
-      }
     }
     memoizedIsInitialized = 1;
     return true;
@@ -297,17 +202,12 @@ public final class IrFunction extends
     if (((bitField0_ & 0x00000001) == 0x00000001)) {
       output.writeMessage(1, base_);
     }
-    if (((bitField0_ & 0x00000002) == 0x00000002)) {
-      output.writeEnum(2, modality_.getNumber());
-    }
-    if (((bitField0_ & 0x00000004) == 0x00000004)) {
-      output.writeBool(3, isTailrec_);
-    }
-    if (((bitField0_ & 0x00000008) == 0x00000008)) {
-      output.writeBool(4, isSuspend_);
+    if (getOverriddenList().size() > 0) {
+      output.writeRawVarint32(18);
+      output.writeRawVarint32(overriddenMemoizedSerializedSize);
     }
     for (int i = 0; i < overridden_.size(); i++) {
-      output.writeMessage(5, overridden_.get(i));
+      output.writeInt64NoTag(overridden_.get(i));
     }
     output.writeRawBytes(unknownFields);
   }
@@ -322,21 +222,19 @@ public final class IrFunction extends
       size += org.jetbrains.kotlin.protobuf.CodedOutputStream
         .computeMessageSize(1, base_);
     }
-    if (((bitField0_ & 0x00000002) == 0x00000002)) {
-      size += org.jetbrains.kotlin.protobuf.CodedOutputStream
-        .computeEnumSize(2, modality_.getNumber());
-    }
-    if (((bitField0_ & 0x00000004) == 0x00000004)) {
-      size += org.jetbrains.kotlin.protobuf.CodedOutputStream
-        .computeBoolSize(3, isTailrec_);
-    }
-    if (((bitField0_ & 0x00000008) == 0x00000008)) {
-      size += org.jetbrains.kotlin.protobuf.CodedOutputStream
-        .computeBoolSize(4, isSuspend_);
-    }
-    for (int i = 0; i < overridden_.size(); i++) {
-      size += org.jetbrains.kotlin.protobuf.CodedOutputStream
-        .computeMessageSize(5, overridden_.get(i));
+    {
+      int dataSize = 0;
+      for (int i = 0; i < overridden_.size(); i++) {
+        dataSize += org.jetbrains.kotlin.protobuf.CodedOutputStream
+          .computeInt64SizeNoTag(overridden_.get(i));
+      }
+      size += dataSize;
+      if (!getOverriddenList().isEmpty()) {
+        size += 1;
+        size += org.jetbrains.kotlin.protobuf.CodedOutputStream
+            .computeInt32SizeNoTag(dataSize);
+      }
+      overriddenMemoizedSerializedSize = dataSize;
     }
     size += unknownFields.size();
     memoizedSerializedSize = size;
@@ -434,14 +332,8 @@ public final class IrFunction extends
       super.clear();
       base_ = org.jetbrains.kotlin.backend.common.serialization.proto.IrFunctionBase.getDefaultInstance();
       bitField0_ = (bitField0_ & ~0x00000001);
-      modality_ = org.jetbrains.kotlin.backend.common.serialization.proto.ModalityKind.FINAL_MODALITY;
-      bitField0_ = (bitField0_ & ~0x00000002);
-      isTailrec_ = false;
-      bitField0_ = (bitField0_ & ~0x00000004);
-      isSuspend_ = false;
-      bitField0_ = (bitField0_ & ~0x00000008);
       overridden_ = java.util.Collections.emptyList();
-      bitField0_ = (bitField0_ & ~0x00000010);
+      bitField0_ = (bitField0_ & ~0x00000002);
       return this;
     }
 
@@ -469,21 +361,9 @@ public final class IrFunction extends
         to_bitField0_ |= 0x00000001;
       }
       result.base_ = base_;
-      if (((from_bitField0_ & 0x00000002) == 0x00000002)) {
-        to_bitField0_ |= 0x00000002;
-      }
-      result.modality_ = modality_;
-      if (((from_bitField0_ & 0x00000004) == 0x00000004)) {
-        to_bitField0_ |= 0x00000004;
-      }
-      result.isTailrec_ = isTailrec_;
-      if (((from_bitField0_ & 0x00000008) == 0x00000008)) {
-        to_bitField0_ |= 0x00000008;
-      }
-      result.isSuspend_ = isSuspend_;
-      if (((bitField0_ & 0x00000010) == 0x00000010)) {
+      if (((bitField0_ & 0x00000002) == 0x00000002)) {
         overridden_ = java.util.Collections.unmodifiableList(overridden_);
-        bitField0_ = (bitField0_ & ~0x00000010);
+        bitField0_ = (bitField0_ & ~0x00000002);
       }
       result.overridden_ = overridden_;
       result.bitField0_ = to_bitField0_;
@@ -495,19 +375,10 @@ public final class IrFunction extends
       if (other.hasBase()) {
         mergeBase(other.getBase());
       }
-      if (other.hasModality()) {
-        setModality(other.getModality());
-      }
-      if (other.hasIsTailrec()) {
-        setIsTailrec(other.getIsTailrec());
-      }
-      if (other.hasIsSuspend()) {
-        setIsSuspend(other.getIsSuspend());
-      }
       if (!other.overridden_.isEmpty()) {
         if (overridden_.isEmpty()) {
           overridden_ = other.overridden_;
-          bitField0_ = (bitField0_ & ~0x00000010);
+          bitField0_ = (bitField0_ & ~0x00000002);
         } else {
           ensureOverriddenIsMutable();
           overridden_.addAll(other.overridden_);
@@ -524,27 +395,9 @@ public final class IrFunction extends
         
         return false;
       }
-      if (!hasModality()) {
-        
-        return false;
-      }
-      if (!hasIsTailrec()) {
-        
-        return false;
-      }
-      if (!hasIsSuspend()) {
-        
-        return false;
-      }
       if (!getBase().isInitialized()) {
         
         return false;
-      }
-      for (int i = 0; i < getOverriddenCount(); i++) {
-        if (!getOverridden(i).isInitialized()) {
-          
-          return false;
-        }
       }
       return true;
     }
@@ -628,275 +481,97 @@ public final class IrFunction extends
       return this;
     }
 
-    private org.jetbrains.kotlin.backend.common.serialization.proto.ModalityKind modality_ = org.jetbrains.kotlin.backend.common.serialization.proto.ModalityKind.FINAL_MODALITY;
-    /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.ModalityKind modality = 2;</code>
-     */
-    public boolean hasModality() {
-      return ((bitField0_ & 0x00000002) == 0x00000002);
-    }
-    /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.ModalityKind modality = 2;</code>
-     */
-    public org.jetbrains.kotlin.backend.common.serialization.proto.ModalityKind getModality() {
-      return modality_;
-    }
-    /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.ModalityKind modality = 2;</code>
-     */
-    public Builder setModality(org.jetbrains.kotlin.backend.common.serialization.proto.ModalityKind value) {
-      if (value == null) {
-        throw new NullPointerException();
-      }
-      bitField0_ |= 0x00000002;
-      modality_ = value;
-      
-      return this;
-    }
-    /**
-     * <code>required .org.jetbrains.kotlin.backend.common.serialization.proto.ModalityKind modality = 2;</code>
-     */
-    public Builder clearModality() {
-      bitField0_ = (bitField0_ & ~0x00000002);
-      modality_ = org.jetbrains.kotlin.backend.common.serialization.proto.ModalityKind.FINAL_MODALITY;
-      
-      return this;
-    }
-
-    private boolean isTailrec_ ;
-    /**
-     * <code>required bool is_tailrec = 3;</code>
-     */
-    public boolean hasIsTailrec() {
-      return ((bitField0_ & 0x00000004) == 0x00000004);
-    }
-    /**
-     * <code>required bool is_tailrec = 3;</code>
-     */
-    public boolean getIsTailrec() {
-      return isTailrec_;
-    }
-    /**
-     * <code>required bool is_tailrec = 3;</code>
-     */
-    public Builder setIsTailrec(boolean value) {
-      bitField0_ |= 0x00000004;
-      isTailrec_ = value;
-      
-      return this;
-    }
-    /**
-     * <code>required bool is_tailrec = 3;</code>
-     */
-    public Builder clearIsTailrec() {
-      bitField0_ = (bitField0_ & ~0x00000004);
-      isTailrec_ = false;
-      
-      return this;
-    }
-
-    private boolean isSuspend_ ;
-    /**
-     * <code>required bool is_suspend = 4;</code>
-     */
-    public boolean hasIsSuspend() {
-      return ((bitField0_ & 0x00000008) == 0x00000008);
-    }
-    /**
-     * <code>required bool is_suspend = 4;</code>
-     */
-    public boolean getIsSuspend() {
-      return isSuspend_;
-    }
-    /**
-     * <code>required bool is_suspend = 4;</code>
-     */
-    public Builder setIsSuspend(boolean value) {
-      bitField0_ |= 0x00000008;
-      isSuspend_ = value;
-      
-      return this;
-    }
-    /**
-     * <code>required bool is_suspend = 4;</code>
-     */
-    public Builder clearIsSuspend() {
-      bitField0_ = (bitField0_ & ~0x00000008);
-      isSuspend_ = false;
-      
-      return this;
-    }
-
-    private java.util.List<org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex> overridden_ =
-      java.util.Collections.emptyList();
+    private java.util.List<java.lang.Long> overridden_ = java.util.Collections.emptyList();
     private void ensureOverriddenIsMutable() {
-      if (!((bitField0_ & 0x00000010) == 0x00000010)) {
-        overridden_ = new java.util.ArrayList<org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex>(overridden_);
-        bitField0_ |= 0x00000010;
+      if (!((bitField0_ & 0x00000002) == 0x00000002)) {
+        overridden_ = new java.util.ArrayList<java.lang.Long>(overridden_);
+        bitField0_ |= 0x00000002;
        }
     }
-
     /**
-     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex overridden = 5;</code>
+     * <code>repeated int64 overridden = 2 [packed = true];</code>
      *
      * <pre>
-     *optional UniqId corresponding_property = 7;
+     * TODO: supposed to be deleted
      * </pre>
      */
-    public java.util.List<org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex> getOverriddenList() {
+    public java.util.List<java.lang.Long>
+        getOverriddenList() {
       return java.util.Collections.unmodifiableList(overridden_);
     }
     /**
-     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex overridden = 5;</code>
+     * <code>repeated int64 overridden = 2 [packed = true];</code>
      *
      * <pre>
-     *optional UniqId corresponding_property = 7;
+     * TODO: supposed to be deleted
      * </pre>
      */
     public int getOverriddenCount() {
       return overridden_.size();
     }
     /**
-     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex overridden = 5;</code>
+     * <code>repeated int64 overridden = 2 [packed = true];</code>
      *
      * <pre>
-     *optional UniqId corresponding_property = 7;
+     * TODO: supposed to be deleted
      * </pre>
      */
-    public org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex getOverridden(int index) {
+    public long getOverridden(int index) {
       return overridden_.get(index);
     }
     /**
-     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex overridden = 5;</code>
+     * <code>repeated int64 overridden = 2 [packed = true];</code>
      *
      * <pre>
-     *optional UniqId corresponding_property = 7;
+     * TODO: supposed to be deleted
      * </pre>
      */
     public Builder setOverridden(
-        int index, org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex value) {
-      if (value == null) {
-        throw new NullPointerException();
-      }
+        int index, long value) {
       ensureOverriddenIsMutable();
       overridden_.set(index, value);
-
+      
       return this;
     }
     /**
-     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex overridden = 5;</code>
+     * <code>repeated int64 overridden = 2 [packed = true];</code>
      *
      * <pre>
-     *optional UniqId corresponding_property = 7;
+     * TODO: supposed to be deleted
      * </pre>
      */
-    public Builder setOverridden(
-        int index, org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.Builder builderForValue) {
-      ensureOverriddenIsMutable();
-      overridden_.set(index, builderForValue.build());
-
-      return this;
-    }
-    /**
-     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex overridden = 5;</code>
-     *
-     * <pre>
-     *optional UniqId corresponding_property = 7;
-     * </pre>
-     */
-    public Builder addOverridden(org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex value) {
-      if (value == null) {
-        throw new NullPointerException();
-      }
+    public Builder addOverridden(long value) {
       ensureOverriddenIsMutable();
       overridden_.add(value);
-
+      
       return this;
     }
     /**
-     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex overridden = 5;</code>
+     * <code>repeated int64 overridden = 2 [packed = true];</code>
      *
      * <pre>
-     *optional UniqId corresponding_property = 7;
-     * </pre>
-     */
-    public Builder addOverridden(
-        int index, org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex value) {
-      if (value == null) {
-        throw new NullPointerException();
-      }
-      ensureOverriddenIsMutable();
-      overridden_.add(index, value);
-
-      return this;
-    }
-    /**
-     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex overridden = 5;</code>
-     *
-     * <pre>
-     *optional UniqId corresponding_property = 7;
-     * </pre>
-     */
-    public Builder addOverridden(
-        org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.Builder builderForValue) {
-      ensureOverriddenIsMutable();
-      overridden_.add(builderForValue.build());
-
-      return this;
-    }
-    /**
-     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex overridden = 5;</code>
-     *
-     * <pre>
-     *optional UniqId corresponding_property = 7;
-     * </pre>
-     */
-    public Builder addOverridden(
-        int index, org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex.Builder builderForValue) {
-      ensureOverriddenIsMutable();
-      overridden_.add(index, builderForValue.build());
-
-      return this;
-    }
-    /**
-     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex overridden = 5;</code>
-     *
-     * <pre>
-     *optional UniqId corresponding_property = 7;
+     * TODO: supposed to be deleted
      * </pre>
      */
     public Builder addAllOverridden(
-        java.lang.Iterable<? extends org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex> values) {
+        java.lang.Iterable<? extends java.lang.Long> values) {
       ensureOverriddenIsMutable();
       org.jetbrains.kotlin.protobuf.AbstractMessageLite.Builder.addAll(
           values, overridden_);
-
+      
       return this;
     }
     /**
-     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex overridden = 5;</code>
+     * <code>repeated int64 overridden = 2 [packed = true];</code>
      *
      * <pre>
-     *optional UniqId corresponding_property = 7;
+     * TODO: supposed to be deleted
      * </pre>
      */
     public Builder clearOverridden() {
       overridden_ = java.util.Collections.emptyList();
-      bitField0_ = (bitField0_ & ~0x00000010);
-
-      return this;
-    }
-    /**
-     * <code>repeated .org.jetbrains.kotlin.backend.common.serialization.proto.IrDataIndex overridden = 5;</code>
-     *
-     * <pre>
-     *optional UniqId corresponding_property = 7;
-     * </pre>
-     */
-    public Builder removeOverridden(int index) {
-      ensureOverriddenIsMutable();
-      overridden_.remove(index);
-
+      bitField0_ = (bitField0_ & ~0x00000002);
+      
       return this;
     }
 

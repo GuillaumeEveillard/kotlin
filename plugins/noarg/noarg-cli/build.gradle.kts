@@ -15,19 +15,13 @@ dependencies {
     compileOnly(intellijCoreDep()) { includeJars("intellij-core") }
     compileOnly(intellijDep()) { includeJars("asm-all", rootProject = rootProject) }
     runtime(kotlinStdlib())
-    testRuntimeOnly(intellijDep()) {
-        includeJars("guava", rootProject = rootProject)
-    }
-    testRuntimeOnly(project(":kotlin-compiler"))
 
-    Platform[192].orHigher {
-        testRuntimeOnly(intellijDep()) { includeJars("platform-concurrency") }
-    }
-    
     testCompile(project(":compiler:backend"))
     testCompile(project(":compiler:cli"))
     testCompile(projectTests(":compiler:tests-common"))
     testCompile(commonDep("junit:junit"))
+
+    testRuntimeOnly(intellijCoreDep()) { includeJars("intellij-core") }
 }
 
 sourceSets {
@@ -37,8 +31,14 @@ sourceSets {
 
 runtimeJar()
 
+sourcesJar()
+
+javadocJar()
+
 testsJar()
 
 projectTest(parallel = true) {
     workingDir = rootDir
 }
+
+apply(from = "$rootDir/gradle/kotlinPluginPublication.gradle.kts")

@@ -72,7 +72,7 @@ class IncrementalCompilationJvmMultiProjectIT : BaseIncrementalCompilationMultiP
 
             dependencies {
                 compile "org.jetbrains.kotlin:kotlin-stdlib:${"$"}kotlin_version"
-                compile 'org.codehaus.groovy:groovy-all:2.4.7'
+                compile 'org.codehaus.groovy:groovy-all:2.4.8'
             }
             """.trimIndent()
         }
@@ -293,7 +293,7 @@ open class A {
 
         val appBuildGradle = project.projectDir.resolve("app/build.gradle")
         val appBuildGradleContent = appBuildGradle.readText()
-        appBuildGradle.modify { it.checkedReplace("compile project(':lib')", "") }
+        appBuildGradle.modify { it.checkedReplace("implementation project(':lib')", "") }
         val aaKt = project.projectDir.getFileByName("AA.kt")
         aaKt.addNewLine()
 

@@ -29,6 +29,7 @@ import org.jetbrains.kotlin.resolve.DescriptorUtils
 import org.jetbrains.kotlin.resolve.descriptorUtil.getSuperClassOrAny
 import org.jetbrains.kotlin.resolve.descriptorUtil.module
 import org.jetbrains.kotlinx.serialization.compiler.backend.common.*
+import org.jetbrains.kotlinx.serialization.compiler.diagnostic.serializableAnnotationIsUseless
 import org.jetbrains.kotlinx.serialization.compiler.resolve.*
 import org.jetbrains.org.objectweb.asm.Label
 import org.jetbrains.org.objectweb.asm.Type
@@ -45,7 +46,7 @@ class SerializableCodegenImpl(
             val serializableClass = codegen.descriptor
             if (serializableClass.isInternalSerializable)
                 SerializableCodegenImpl(codegen).generate()
-            else if (serializableClass.hasSerializableAnnotationWithoutArgs && !serializableClass.hasCompanionObjectAsSerializer) {
+            else if (serializableClass.serializableAnnotationIsUseless) {
                 throw CompilationException(
                     "@Serializable annotation on $serializableClass would be ignored because it is impossible to serialize it automatically. " +
                             "Provide serializer manually via e.g. companion object", null, serializableClass.findPsi()
@@ -103,8 +104,8 @@ class SerializableCodegenImpl(
             superTypeArguments.forEach {
                 val genericIdx = serializableDescriptor.defaultType.arguments.indexOf(it).let { if (it == -1) null else it }
                 val serial = findTypeSerializerOrContext(serializableDescriptor.module, it.type)
-                stackValueSerializerInstance(classCodegen, serializableDescriptor.module, it.type, serial, this, genericIdx) {
-                    load(offsetI + it, kSerializerType)
+                stackValueSerializerInstance(classCodegen, serializableDescriptor.module, it.type, serial, this, genericIdx) { i, _ ->
+                    load(offsetI + i, kSerializerType)
                 }
             }
             val superSignature =
@@ -158,7 +159,7 @@ class SerializableCodegenImpl(
                 exprCodegen.gen(expr, propAsmType)
                 val rhs = StackValue.onStack(propAsmType)
                 // INVOKESTATIC kotlin/jvm/internal/Intrinsics.areEqual (Ljava/lang/Object;Ljava/lang/Object;)Z
-                AsmUtil.genEqualsForExpressionsOnStack(KtTokens.EXCLEQ, lhs, rhs).put(Type.BOOLEAN_TYPE, null, this)
+                DescriptorAsmUtil.genEqualsForExpressionsOnStack(KtTokens.EXCLEQ, lhs, rhs).put(Type.BOOLEAN_TYPE, null, this)
                 ifne(writeLabel)
 
                 // output.shouldEncodeElementDefault(descriptor, i)
@@ -187,17 +188,17 @@ class SerializableCodegenImpl(
             val propType = prop.asmType
             if (!prop.optional) {
                 // primary were validated before constructor call
-                genValidateProperty(i, bitMaskOff)
+                genValidateProperty(i, bitMaskOff(i))
                 val nonThrowLabel = Label()
                 ificmpne(nonThrowLabel)
-                genExceptionThrow(serializationExceptionMissingFieldName, prop.name)
+                genMissingFieldExceptionThrow(prop.name)
                 visitLabel(nonThrowLabel)
                 // setting field
                 load(0, thisAsmType)
                 load(propOffset, propType)
                 putfield(thisAsmType.internalName, prop.descriptor.name.asString(), propType.descriptor)
             } else {
-                genValidateProperty(i, bitMaskOff)
+                genValidateProperty(i, bitMaskOff(i))
                 val setLbl = Label()
                 val nextLabel = Label()
                 ificmpeq(setLbl)

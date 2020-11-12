@@ -1,6 +1,6 @@
 /*
- * Copyright 2010-2019 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license
- * that can be found in the license/LICENSE.txt file.
+ * Copyright 2010-2020 JetBrains s.r.o. and Kotlin Programming Language contributors.
+ * Use of this source code is governed by the Apache 2.0 license that can be found in the license/LICENSE.txt file.
  */
 
 package org.jetbrains.kotlin.cli.js
@@ -8,41 +8,42 @@ package org.jetbrains.kotlin.cli.js
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.util.io.FileUtil
 import com.intellij.openapi.util.text.StringUtil
+import org.jetbrains.kotlin.backend.common.phaser.PhaseConfig
+import org.jetbrains.kotlin.backend.common.serialization.metadata.KlibMetadataVersion
+import org.jetbrains.kotlin.backend.wasm.compileWasm
+import org.jetbrains.kotlin.backend.wasm.wasmPhases
 import org.jetbrains.kotlin.cli.common.*
 import org.jetbrains.kotlin.cli.common.ExitCode.COMPILATION_ERROR
 import org.jetbrains.kotlin.cli.common.ExitCode.OK
 import org.jetbrains.kotlin.cli.common.arguments.K2JSCompilerArguments
 import org.jetbrains.kotlin.cli.common.arguments.K2JsArgumentConstants
 import org.jetbrains.kotlin.cli.common.config.addKotlinSourceRoot
+import org.jetbrains.kotlin.cli.common.extensions.ScriptEvaluationExtension
+import org.jetbrains.kotlin.cli.common.messages.AnalyzerWithCompilerReport
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageSeverity.*
+import org.jetbrains.kotlin.cli.common.messages.GroupingMessageCollector
 import org.jetbrains.kotlin.cli.common.messages.MessageCollector
 import org.jetbrains.kotlin.cli.common.messages.MessageUtil
 import org.jetbrains.kotlin.cli.jvm.compiler.EnvironmentConfigFiles
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
 import org.jetbrains.kotlin.cli.jvm.plugins.PluginCliParser
-import org.jetbrains.kotlin.config.CommonConfigurationKeys
-import org.jetbrains.kotlin.config.CompilerConfiguration
-import org.jetbrains.kotlin.config.IncrementalCompilation
-import org.jetbrains.kotlin.config.Services
+import org.jetbrains.kotlin.config.*
 import org.jetbrains.kotlin.incremental.components.ExpectActualTracker
 import org.jetbrains.kotlin.incremental.components.LookupTracker
 import org.jetbrains.kotlin.incremental.js.IncrementalDataProvider
+import org.jetbrains.kotlin.incremental.js.IncrementalNextRoundChecker
 import org.jetbrains.kotlin.incremental.js.IncrementalResultsConsumer
 import org.jetbrains.kotlin.ir.backend.js.*
-import org.jetbrains.kotlin.js.config.EcmaVersion
-import org.jetbrains.kotlin.js.config.JSConfigurationKeys
-import org.jetbrains.kotlin.js.config.JsConfig
-import org.jetbrains.kotlin.js.config.SourceMapSourceEmbedding
-import org.jetbrains.kotlin.library.resolver.impl.libraryResolver
-import org.jetbrains.kotlin.library.KotlinLibrary
-import org.jetbrains.kotlin.library.KotlinLibrarySearchPathResolver
-import org.jetbrains.kotlin.library.UnresolvedLibrary
-import org.jetbrains.kotlin.library.toUnresolvedLibraries
+import org.jetbrains.kotlin.ir.declarations.persistent.PersistentIrFactory
+import org.jetbrains.kotlin.js.config.*
 import org.jetbrains.kotlin.metadata.deserialization.BinaryVersion
+import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.KtFile
 import org.jetbrains.kotlin.serialization.js.ModuleKind
-import org.jetbrains.kotlin.utils.JsMetadataVersion
+import org.jetbrains.kotlin.util.Logger
 import org.jetbrains.kotlin.utils.KotlinPaths
+import org.jetbrains.kotlin.utils.PathUtil
+import org.jetbrains.kotlin.utils.fileUtils.withReplacedExtensionOrNull
 import org.jetbrains.kotlin.utils.join
 import java.io.File
 import java.io.IOException
@@ -70,22 +71,44 @@ class K2JsIrCompiler : CLICompiler<K2JSCompilerArguments>() {
     ): ExitCode {
         val messageCollector = configuration.getNotNull(CLIConfigurationKeys.MESSAGE_COLLECTOR_KEY)
 
+        val pluginLoadResult = loadPlugins(paths, arguments, configuration)
+        if (pluginLoadResult != ExitCode.OK) return pluginLoadResult
+
+        //TODO: add to configuration everything that may come in handy at script compiler and use it there
+        if (arguments.script) {
+
+            if (!arguments.enableJsScripting) {
+                messageCollector.report(ERROR, "Script for K/JS should be enabled explicitly, see -Xenable-js-scripting")
+                return COMPILATION_ERROR
+            }
+
+            configuration.put(CommonConfigurationKeys.MODULE_NAME, "repl.kts")
+
+            val environment = KotlinCoreEnvironment.getOrCreateApplicationEnvironmentForProduction(rootDisposable, configuration)
+            val projectEnv = KotlinCoreEnvironment.ProjectEnvironment(rootDisposable, environment)
+            projectEnv.registerExtensionsFromPlugins(configuration)
+
+            val scriptingEvaluators = ScriptEvaluationExtension.getInstances(projectEnv.project)
+            val scriptingEvaluator = scriptingEvaluators.find { it.isAccepted(arguments) }
+            if (scriptingEvaluator == null) {
+                messageCollector.report(ERROR, "Unable to evaluate script, no scripting plugin loaded")
+                return COMPILATION_ERROR
+            }
+
+            return scriptingEvaluator.eval(arguments, configuration, projectEnv)
+        }
+
         if (arguments.freeArgs.isEmpty() && !IncrementalCompilation.isEnabledForJs()) {
             if (arguments.version) {
                 return OK
             }
-            messageCollector.report(ERROR, "Specify at least one source file or directory", null)
-            return COMPILATION_ERROR
+            if (arguments.includes.isNullOrEmpty()) {
+                messageCollector.report(ERROR, "Specify at least one source file or directory", null)
+                return COMPILATION_ERROR
+            }
         }
 
-        val pluginLoadResult = PluginCliParser.loadPluginsSafe(
-            arguments.pluginClasspaths,
-            arguments.pluginOptions,
-            configuration
-        )
-        if (pluginLoadResult != OK) return pluginLoadResult
-
-        val libraries: List<String> = configureLibraries(arguments.libraries)
+        val libraries: List<String> = configureLibraries(arguments.libraries) + listOfNotNull(arguments.includes)
         val friendLibraries: List<String> = configureLibraries(arguments.friendModules)
 
         configuration.put(JSConfigurationKeys.LIBRARIES, libraries)
@@ -99,11 +122,11 @@ class K2JsIrCompiler : CLICompiler<K2JSCompilerArguments>() {
 
         val environmentForJS =
             KotlinCoreEnvironment.createForProduction(rootDisposable, configuration, EnvironmentConfigFiles.JS_CONFIG_FILES)
-
-        val project = environmentForJS.project
+        val projectJs = environmentForJS.project
+        val configurationJs = environmentForJS.configuration
         val sourcesFiles = environmentForJS.getSourceFiles()
 
-        environmentForJS.configuration.put(CLIConfigurationKeys.ALLOW_KOTLIN_PACKAGE, arguments.allowKotlinPackage)
+        configurationJs.put(CLIConfigurationKeys.ALLOW_KOTLIN_PACKAGE, arguments.allowKotlinPackage)
 
         if (!checkKotlinPackageUsage(environmentForJS, sourcesFiles)) return ExitCode.COMPILATION_ERROR
 
@@ -117,7 +140,7 @@ class K2JsIrCompiler : CLICompiler<K2JSCompilerArguments>() {
             return ExitCode.COMPILATION_ERROR
         }
 
-        if (sourcesFiles.isEmpty() && !IncrementalCompilation.isEnabledForJs()) {
+        if (sourcesFiles.isEmpty() && !IncrementalCompilation.isEnabledForJs() && arguments.includes.isNullOrEmpty()) {
             messageCollector.report(ERROR, "No source files", null)
             return COMPILATION_ERROR
         }
@@ -128,9 +151,14 @@ class K2JsIrCompiler : CLICompiler<K2JSCompilerArguments>() {
 
         val outputFile = File(outputFilePath)
 
-        configuration.put(CommonConfigurationKeys.MODULE_NAME, FileUtil.getNameWithoutExtension(outputFile))
+        configurationJs.put(
+            CommonConfigurationKeys.MODULE_NAME,
+            arguments.irModuleName ?: FileUtil.getNameWithoutExtension(outputFile)
+        )
 
-        val config = JsConfig(project, configuration)
+        // TODO: in this method at least 3 different compiler configurations are used (original, env.configuration, jsConfig.configuration)
+        // Such situation seems a bit buggy...
+        val config = JsConfig(projectJs, configurationJs)
         val outputDir: File = outputFile.parentFile ?: outputFile.absoluteFile.parentFile!!
         try {
             config.configuration.put(JSConfigurationKeys.OUTPUT_DIR, outputDir.canonicalFile)
@@ -142,59 +170,112 @@ class K2JsIrCompiler : CLICompiler<K2JSCompilerArguments>() {
         // TODO: Handle non-empty main call arguments
         val mainCallArguments = if (K2JsArgumentConstants.NO_CALL == arguments.main) null else emptyList<String>()
 
-        val unresolvedLibraries = libraries.toUnresolvedLibraries
-        // Configure resolver to only understands absolute path libraries.
-        val libraryResolver = KotlinLibrarySearchPathResolver<KotlinLibrary>(
-            repositories = emptyList(),
-            directLibs = libraries,
-            distributionKlib = null,
-            localKotlinDir = null,
-            skipCurrentDir = true
-            // TODO: pass logger attached to message collector here.
-        ).libraryResolver()
-        val resolvedLibraries = libraryResolver.resolveWithDependencies(unresolvedLibraries, true, true, true)
-        val friendDependencies = resolvedLibraries.getFullList()
-            .filter {
-                it.moduleName in friendLibraries
-            }
+        val resolvedLibraries = jsResolveLibraries(
+            libraries,
+            messageCollectorLogger(configuration[CLIConfigurationKeys.MESSAGE_COLLECTOR_KEY] ?: error("Could not find message collector"))
+        )
 
-        val produceKind = produceMap[arguments.irProduceOnly]
-        if (produceKind == null) {
-            messageCollector.report(ERROR, "Unknown produce kind: ${arguments.irProduceOnly}. Valid values are: js, klib")
+        val friendAbsolutePaths = friendLibraries.map { File(it).absolutePath }
+        val friendDependencies = resolvedLibraries.getFullList().filter {
+            it.libraryFile.absolutePath in friendAbsolutePaths
         }
 
-        if (produceKind == ProduceKind.KLIB || (produceKind == ProduceKind.DEFAULT && arguments.metaInfo)) {
+        if (arguments.irProduceKlibDir || arguments.irProduceKlibFile) {
             val outputKlibPath =
-                if (arguments.irLegacyGradlePluginCompatibility)
+                if (arguments.irProduceKlibDir)
                     File(outputFilePath).parent
                 else
-                    "$outputFilePath.klib"
+                    outputFilePath
 
-            generateKLib(
-                project = config.project,
-                files = sourcesFiles,
-                configuration = config.configuration,
-                allDependencies = resolvedLibraries,
-                friendDependencies = friendDependencies,
-                outputKlibPath = outputKlibPath,
-                nopack = arguments.irLegacyGradlePluginCompatibility
-            )
+            try {
+                generateKLib(
+                    project = config.project,
+                    files = sourcesFiles,
+                    analyzer = AnalyzerWithCompilerReport(config.configuration),
+                    configuration = config.configuration,
+                    allDependencies = resolvedLibraries,
+                    friendDependencies = friendDependencies,
+                    irFactory = PersistentIrFactory,
+                    outputKlibPath = outputKlibPath,
+                    nopack = arguments.irProduceKlibDir
+                )
+            } catch (e: JsIrCompilationError) {
+                return COMPILATION_ERROR
+            }
         }
 
-        if (produceKind == ProduceKind.JS || produceKind == ProduceKind.DEFAULT) {
+        if (arguments.irProduceJs) {
             val phaseConfig = createPhaseConfig(jsPhases, arguments, messageCollector)
 
-            val compiledModule = compile(
-                project,
-                sourcesFiles,
-                configuration,
-                phaseConfig,
-                allDependencies = resolvedLibraries,
-                friendDependencies = friendDependencies,
-                mainArguments = mainCallArguments
-            )
+            val includes = arguments.includes
 
-            outputFile.writeText(compiledModule.jsCode)
+            val mainModule = if (includes != null) {
+                if (sourcesFiles.isNotEmpty()) {
+                    messageCollector.report(ERROR, "Source files are not supported when -Xinclude is present")
+                }
+                val allLibraries = resolvedLibraries.getFullList()
+                val mainLib = allLibraries.find { it.libraryFile.absolutePath == File(includes).absolutePath }!!
+                MainModule.Klib(mainLib)
+            } else {
+                MainModule.SourceFiles(sourcesFiles)
+            }
+
+            if (arguments.wasm) {
+                val res = compileWasm(
+                    projectJs,
+                    mainModule,
+                    AnalyzerWithCompilerReport(config.configuration),
+                    config.configuration,
+                    PhaseConfig(wasmPhases),
+                    allDependencies = resolvedLibraries,
+                    friendDependencies = friendDependencies,
+                    exportedDeclarations = setOf(FqName("main"))
+                )
+                val outputWasmFile = outputFile.withReplacedExtensionOrNull(outputFile.extension, "wasm")!!
+                outputWasmFile.writeBytes(res.wasm)
+                val outputWatFile = outputFile.withReplacedExtensionOrNull(outputFile.extension, "wat")!!
+                outputWatFile.writeText(res.wat)
+
+                val runner = """
+                    const wasmBinary = read(String.raw`${outputWasmFile.absoluteFile}`, 'binary');
+                    const wasmModule = new WebAssembly.Module(wasmBinary);
+                    const wasmInstance = new WebAssembly.Instance(wasmModule, { runtime, js_code });
+                    wasmInstance.exports.main();
+                """.trimIndent()
+
+                outputFile.writeText(res.js + "\n" + runner)
+                return OK
+            }
+
+            val compiledModule = try {
+                compile(
+                    projectJs,
+                    mainModule,
+                    AnalyzerWithCompilerReport(config.configuration),
+                    config.configuration,
+                    phaseConfig,
+                    allDependencies = resolvedLibraries,
+                    friendDependencies = friendDependencies,
+                    mainArguments = mainCallArguments,
+                    generateFullJs = !arguments.irDce,
+                    generateDceJs = arguments.irDce,
+                    dceDriven = arguments.irDceDriven,
+                    multiModule = arguments.irPerModule,
+                    relativeRequirePath = true
+                )
+            } catch (e: JsIrCompilationError) {
+                return COMPILATION_ERROR
+            }
+
+            val jsCode = if (arguments.irDce && !arguments.irDceDriven) compiledModule.dceJsCode!! else compiledModule.jsCode!!
+            outputFile.writeText(jsCode.mainModule)
+            jsCode.dependencies.forEach { (name, content) ->
+                outputFile.resolveSibling("$name.js").writeText(content)
+            }
+            if (arguments.generateDts) {
+                val dtsFile = outputFile.withReplacedExtensionOrNull(outputFile.extension, "d.ts")!!
+                dtsFile.writeText(compiledModule.tsDefinitions ?: error("No ts definitions"))
+            }
         }
 
         return OK
@@ -252,24 +333,17 @@ class K2JsIrCompiler : CLICompiler<K2JSCompilerArguments>() {
         }
         configuration.put(JSConfigurationKeys.MODULE_KIND, moduleKind)
 
-        val incrementalDataProvider = services[IncrementalDataProvider::class.java]
-        if (incrementalDataProvider != null) {
-            configuration.put(JSConfigurationKeys.INCREMENTAL_DATA_PROVIDER, incrementalDataProvider)
-        }
+        configuration.putIfNotNull(JSConfigurationKeys.INCREMENTAL_DATA_PROVIDER, services[IncrementalDataProvider::class.java])
+        configuration.putIfNotNull(JSConfigurationKeys.INCREMENTAL_RESULTS_CONSUMER, services[IncrementalResultsConsumer::class.java])
+        configuration.putIfNotNull(JSConfigurationKeys.INCREMENTAL_NEXT_ROUND_CHECKER, services[IncrementalNextRoundChecker::class.java])
+        configuration.putIfNotNull(CommonConfigurationKeys.LOOKUP_TRACKER, services[LookupTracker::class.java])
+        configuration.putIfNotNull(CommonConfigurationKeys.EXPECT_ACTUAL_TRACKER, services[ExpectActualTracker::class.java])
 
-        val incrementalResultsConsumer = services[IncrementalResultsConsumer::class.java]
-        if (incrementalResultsConsumer != null) {
-            configuration.put(JSConfigurationKeys.INCREMENTAL_RESULTS_CONSUMER, incrementalResultsConsumer)
-        }
+        val errorTolerancePolicy = arguments.errorTolerancePolicy?.let { ErrorTolerancePolicy.resolvePolicy(it) }
+        configuration.putIfNotNull(JSConfigurationKeys.ERROR_TOLERANCE_POLICY, errorTolerancePolicy)
 
-        val lookupTracker = services[LookupTracker::class.java]
-        if (lookupTracker != null) {
-            configuration.put(CommonConfigurationKeys.LOOKUP_TRACKER, lookupTracker)
-        }
-
-        val expectActualTracker = services[ExpectActualTracker::class.java]
-        if (expectActualTracker != null) {
-            configuration.put(CommonConfigurationKeys.EXPECT_ACTUAL_TRACKER, expectActualTracker)
+        if (errorTolerancePolicy?.allowErrors == true) {
+            configuration.put(JSConfigurationKeys.DEVELOPER_MODE, true)
         }
 
         val sourceMapEmbedContentString = arguments.sourceMapEmbedSources
@@ -288,16 +362,20 @@ class K2JsIrCompiler : CLICompiler<K2JSCompilerArguments>() {
         if (!arguments.sourceMap && sourceMapEmbedContentString != null) {
             messageCollector.report(WARNING, "source-map-embed-sources argument has no effect without source map", null)
         }
+
+        configuration.put(JSConfigurationKeys.PRINT_REACHABILITY_INFO, arguments.irDcePrintReachabilityInfo)
+        configuration.put(JSConfigurationKeys.DISABLE_FAKE_OVERRIDE_VALIDATOR, arguments.disableFakeOverrideValidator)
     }
 
     override fun executableScriptFileName(): String {
-        return "kotlinc-js -Xir"
+        TODO("Provide a proper way to run the compiler with IR BE")
     }
 
     override fun createMetadataVersion(versionArray: IntArray): BinaryVersion {
-        // TODO: Support metadata versions for klibs
-        return JsMetadataVersion(*versionArray)
+        return KlibMetadataVersion(*versionArray)
     }
+
+    override fun MutableList<String>.addPlatformOptions(arguments: K2JSCompilerArguments) {}
 
     companion object {
         private val moduleKindMap = mapOf(
@@ -344,4 +422,26 @@ class K2JsIrCompiler : CLICompiler<K2JSCompilerArguments>() {
                 .filterNot { it.isEmpty() }
         }
     }
+}
+
+fun messageCollectorLogger(collector: MessageCollector) = object : Logger {
+    override fun warning(message: String) = collector.report(STRONG_WARNING, message)
+    override fun error(message: String) = collector.report(ERROR, message)
+    override fun log(message: String) = collector.report(LOGGING, message)
+    override fun fatal(message: String): Nothing {
+        collector.report(ERROR, message)
+        (collector as? GroupingMessageCollector)?.flush()
+        kotlin.error(message)
+    }
+}
+
+fun loadPluginsForTests(configuration: CompilerConfiguration): ExitCode {
+    var pluginClasspaths: Iterable<String> = emptyList()
+    val kotlinPaths = PathUtil.kotlinPathsForCompiler
+    val libPath = kotlinPaths.libPath.takeIf { it.exists() && it.isDirectory } ?: File(".")
+    val (jars, _) =
+        PathUtil.KOTLIN_SCRIPTING_PLUGIN_CLASSPATH_JARS.mapNotNull { File(libPath, it) }.partition { it.exists() }
+    pluginClasspaths = jars.map { it.canonicalPath } + pluginClasspaths
+
+    return PluginCliParser.loadPluginsSafe(pluginClasspaths, mutableListOf(), configuration)
 }
